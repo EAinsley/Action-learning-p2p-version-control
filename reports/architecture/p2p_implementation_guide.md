@@ -1301,9 +1301,23 @@ project(p2p_sync_cpp)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Find required packages
-find_package(sqlite3 REQUIRED)
-find_package(nlohmann_json 3.2.0 REQUIRED)
+# Third-party dependencies (minimal set)
+include(FetchContent)
+
+# nlohmann/json - JSON parsing (header-only)
+FetchContent_Declare(
+    nlohmann_json
+    URL https://github.com/nlohmann/json/releases/download/v3.11.2/json.tar.xz
+)
+FetchContent_MakeAvailable(nlohmann_json)
+
+# fmtlib - String formatting (header-only alternative to iostreams)
+FetchContent_Declare(
+    fmt
+    GIT_REPOSITORY https://github.com/fmtlib/fmt.git
+    GIT_TAG 9.1.0
+)
+FetchContent_MakeAvailable(fmt)
 
 # Platform-specific sources
 if(UNIX AND NOT APPLE)
@@ -1317,6 +1331,7 @@ endif()
 add_executable(cpp_daemon
     src/main.cpp
     src/ipc/ipc_client.cpp
+    src/transfer/file_receiver.cpp
     src/fs/file_system_watcher.cpp
     ${PLATFORM_SOURCES}
     src/hash/hash_manager.cpp
@@ -1326,13 +1341,18 @@ add_executable(cpp_daemon
 )
 
 target_link_libraries(cpp_daemon
-    sqlite3
     nlohmann_json::nlohmann_json
+    fmt::fmt
 )
 
 if(UNIX)
     target_link_libraries(cpp_daemon pthread)
 endif()
+
+# Include directories for header-only libraries
+target_include_directories(cpp_daemon PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
 ```
 
 ### 5.2 Go main.go (Network Coordinator)
