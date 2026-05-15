@@ -130,6 +130,37 @@ Therefore, the central technical problem is to provide a serverless, peer-to-pee
 \section{Identified Gap}
 \section{Positioning Your Project}
 \section{Research to Application Mapping}
+\begin{itemize}
+	\item \textbf{Zero-configuration peer discovery on LAN}
+	\begin{itemize}
+		\item \textbf{Research Insight: } mDNS + DNS-SD provide lightweight discovery without a central server in local networks
+		\item \textbf{Application in project}: Implement Go-based peer discovery with automatic advertise/browse behaviour; use WLAN as primary transport.
+	\end{itemize}
+
+	\item \textbf{Casual ordering for concurrent updates}
+\begin{itemize}
+	\item \textbf{Research Insight:} Logical clocks and event ordering reduce ambiguity when multiple peers edit concurrently.
+	\item \textbf{Application in project:} Track per-file version metadata (timestamps + vector-clock style state) in the coordination layer before resolving conflicts.
+\end{itemize}
+
+\item \textbf{Consistency strategy under failures and partitions}
+\begin{itemize}
+	\item \textbf{Research Insight:} CAP trade-oofs show that perfect consistency is difficult during partition/offline scenarios.
+	\item \textbf{Application in project:} Favor availability and eventual convergence on LAN; use deterministic conflict policy (LWW(Last-Write-Wins) + backup copy) and resync after reconnection.
+\end{itemize}
+
+\item \textbf{Conflict-handling evolution path}
+\begin{itemize}
+	\item \textbf{Research Insight:} CRDTs can avoid some mutual conflict handling but increase design complexity.
+	\item \textbf{Application in project:} Keep CRDT as a future extension; current releases uses simpler LWW(Last-Write-Wins) + version-backup workflow for predictable behavior.
+\end{itemize}
+
+\item \textbf{Bandwidth-efficient synchronization direction}
+\begin{itemize}
+\item \textbf{Research Insight:} Delta-based transfer (rsync-style) reduces unnecessary data movement for large or partially changes files.
+\item \textbf{Application in Project:} Start with whole-file transfer for implementation simplicity, then add block-diff optimization for larger files and multi-peer scaling. 
+\end{itemize}
+\end{itemize}
 \section{Key References}
 \section{Conclusion}
 
