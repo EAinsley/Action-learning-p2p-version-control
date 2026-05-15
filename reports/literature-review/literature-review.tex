@@ -183,7 +183,44 @@ Local sharing not support directory structure and consistency (air drop)
 \end{itemize}
 \end{itemize}
 \section{Key References}
-\section{Conclusion}
+\begin{enumerate}
+	\item RFC 6762 + RFC 6763 (Multicast DNS; DNS-Based Service Discovery) - foundation for LAN peer discovery and service advertisement. \texttt{[RFC6762\_6763]}
+	\item Lamport, L. (1978). \textit{Time, Clocks and the Ordering of Events in a Distributed Systems} - casual ordering baseline for concurrent file-updating reasoning. \texttt{[Lamport1978]}
+	\item Brewer, E.A. (2002). \textit{Brewer’s conjecture and the feasibility of consistent, available, partition-tolerant web services} - consistency/availability trade-off baseline during node failure or disconnection. \ texttt{[Brewer2002]}
+	\item Shapiro, M. et al. (2011). \textit{A comprehensive study of Convergent and Commutative Replicated Data Types} - future model for conflict-free replication in advanced versions. \texttt{[Shapiro2011]}
+	\item Tridgell, A., \& Mackerras, P. (1996). \textit{the rsync algorithm} - reference for later delta-sync optimization in large-file transfers. \texttt{[Rsync1996]}
+\end{enumerate}
 
+\section{Conclusion}
+\begin{itemize}
+	\item \textbf{What did you learn from the literature?}
+	\begin{itemize}
+		\item Practical LAN P2P sync is best grounded in mature discovery standards (mDNS/DNS)
+		\item Concurrent updates require careful version tracking and deterministic conflict resolution for predictable user experience.
+        \item Perfect consistency is not achievable during partitions; favor availability and eventual convergence in local
+        \item CRDTs are promising for future conflict-free replication but add complexity; simpler LWW + backup is a good starting point.
+        \item Delta-based synchronization can optimize bandwidth for large files but should be added after a working whole-file transfer implementation.
+    \end{itemize}
+    \item \textbf{How did the literature influence your design?}
+    \begin{itemize}
+        \item We chose mDNS/DNS-SD for peer discovery to avoid central servers and simplify LAN collaboration.
+        \item We implemented per-file version metadata and a deterministic LWW conflict policy to handle concurrent edits predictably.
+        \item We designed the system to favor availability and eventual convergence during partitions, with resync after reconnection.
+        \item We deferred CRDT implementation to future versions, starting with a simpler versioning and backup approach for conflict handling.
+        \item We prioritized whole-file transfer for initial implementation, with plans to add delta-sync optimization later.
+    \end{itemize}
+    \item \textbf{What are the limitations of the existing work?}
+     \begin{itemize}
+        \item Many existing solutions either require central servers (Google Drive, GitHub) or lack versioning and conflict resolution (AirDrop).
+        \item Some systems support versioning but do not handle dynamic peer discovery or local synchronization well (Git).
+        \item Few solutions provide a seamless directory-level sync experience with heterogeneous file support and simple version recovery for small-scale LAN collaboration.
+    \end{itemize}
+    \item \textbf{What are the next steps in your project?}
+    \begin{itemize}
+        \item Implement the core peer discovery and directory synchronization features based on the insights from the literature.
+        \item Test the system in real-world LAN environments with multiple peers and various file types to evaluate performance and usability.
+        \item Plan for future enhancements, including CRDT-based conflict resolution and delta-sync optimization, based on user feedback and observed limitations.
+    \end{itemize}
+\end{itemize}
 
 \end{document}
