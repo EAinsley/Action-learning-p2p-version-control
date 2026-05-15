@@ -128,28 +128,55 @@ Therefore, the central technical problem is to provide a serverless, peer-to-pee
 \section{Overview of Existing Work}
 \section{Comparison of Approaches}
 \section{Identified Gap}
-\subsection{application}
-We don’t want central server (github/ google docs/good drive/ teams)
 
-Too technical (git)
+University students and small collaborative teams face significant constraints when choosing file-sharing solutions for project work. The current landscape presents a fundamental gap: either users rely on centralized services with inherent limitations, or they resort to ad hoc peer-to-peer tools that lack critical versioning and conflict-resolution features.
 
-File sharing services have limited sharing capabilities.
+\subsection{Limitations of Centralized Solutions}
 
-Ownership of the files (google drive)
+Cloud-based file sharing services (Google Drive, GitHub, Microsoft Teams) introduce several technical and operational challenges:
+\begin{itemize}
+    \item \textbf{Centralized infrastructure dependency:} These services require persistent internet connectivity and rely on third-party servers, introducing latency, availability risks, and potential data privacy concerns in institutional or air-gapped environments.
+    \item \textbf{Limited file type and size support:} Platforms optimized for documents or source code often struggle with heterogeneous file types (datasets, binaries, media files) and impose storage quotas.
+    \item \textbf{Communication friction:} Most file sharing occurs through secondary communication channels (email, messaging apps), separating file distribution from the actual collaboration workspace.
+    \item \textbf{Ownership and permission bottlenecks:} Centralized ownership models (e.g., GitHub branch protection, Google Drive permissions) introduce approval delays and reduce team autonomy. Changes may require owner confirmation (e.g., merge requests), slowing iteration cycles during active sprints.
+\end{itemize}
 
-Limited cloud storage….
-\subsection{technical}
-P2p no versioning
+\subsection{Limitations of Existing Peer-to-Peer Solutions}
 
-Versioning no support for ownership/synchronization…
+While peer-to-peer services (AirDrop, Syncthing) avoid centralization, they present their own constraints:
+\begin{itemize}
+    \item \textbf{Absence of versioning:} Most P2P file-sharing tools provide no built-in history or rollback capability, making accidental overwrites irreversible.
+    \item \textbf{Directory structure inconsistency:} Local P2P services often fail to maintain directory-level consistency and do not integrate seamlessly with the file system abstraction.
+    \item \textbf{Limited conflict resolution:} Concurrent edits and synchronization failures lack deterministic handling strategies.
+\end{itemize}
 
-Heterogeneous file support is not good (for git/google docs/googledrive)
+\subsection{The Gap}
 
-Local sharing not support directory structure and consistency (air drop)
-
-
+The gap is clear: no lightweight, decentralized, directory-level file synchronization tool exists that combines the freedom of peer-to-peer sharing with the safety of version history, the simplicity of local network operation, and support for heterogeneous file types without permission bottlenecks.
 
 \section{Positioning Your Project}
+
+Our project addresses this gap by providing a lightweight, decentralized, directory-level file synchronization system designed specifically for local-network collaboration among small teams. Unlike centralized cloud services or generic P2P tools, our solution combines the best aspects of both approaches while remaining simple and portable.
+
+\subsection{Key Differentiators}
+
+\begin{itemize}
+    \item \textbf{Local network operation:} Our system operates entirely within the local network (WLAN/Bluetooth), eliminating dependency on external servers and providing immediate, latency-free collaboration.
+    \item \textbf{Heterogeneous file support:} The system places no artificial restrictions on file types or sizes. Any file readable by the operating system can be synchronized. The only practical limit is the available disk space and the OS's own capabilities.
+    \item \textbf{Built-in versioning and rollback:} Unlike most P2P solutions, our system automatically preserves previous versions of files before overwriting them, providing a safety net against accidental modifications or conflicts.
+    \item \textbf{Lightweight and portable:} Designed as a simple, portable application with an intuitive user interface. No server configuration, administrative privileges, or complex setup required. Users simply select a folder and begin collaborating.
+    \item \textbf{Transparent file system integration:} The shared directory behaves like a normal folder on the user's computer. Synchronization, versioning, and conflict resolution happen transparently in the background, without requiring users to master specialized workflows (like Git commits or merge requests).
+\end{itemize}
+
+\subsection{Design Philosophy}
+
+Our approach prioritizes \textbf{simplicity}, \textbf{autonomy}, and \textbf{reliability}:
+\begin{itemize}
+    \item \textbf{Simplicity:} Minimize user friction. File sharing and versioning should "just work" without requiring users to understand distributed systems, conflict resolution, or version control concepts.
+    \item \textbf{Autonomy:} No ownership bottlenecks. Any peer can modify files; changes propagate to all peers without requiring approval or synchronization ceremonies.
+    \item \textbf{Reliability:} Preserve data safety. Version history protects against accidental overwrites; deterministic conflict resolution ensures consistent behavior across all peers.
+\end{itemize}
+
 \section{Research to Application Mapping}
 \begin{itemize}
 	\item \textbf{Zero-configuration peer discovery on LAN}
