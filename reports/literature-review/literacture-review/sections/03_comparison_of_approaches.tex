@@ -30,6 +30,162 @@ These dimensions capture the core requirements identified in
 the problem definition and provide a common basis for comparing
 existing approaches.
 
+
+\subsection{Centralized Collaboration Platforms}
+
+Representative examples of centralized collaboration platforms
+include \textit{Google Drive}, \textit{Microsoft OneDrive},
+\textit{Dropbox}, and \textit{Nextcloud}. \textit{Google Drive}
+and \textit{OneDrive} are cloud services operated by large
+providers and offer tightly integrated ecosystems for document
+sharing and synchronization. \textit{Dropbox} focuses primarily
+on cross-device file synchronization and collaborative
+storage, while \textit{Nextcloud} provides a self-hosted
+alternative that allows organizations and users to deploy and
+manage their own collaboration infrastructure.
+
+\subsubsection{Membership Management}
+Centralized collaboration platforms generally provide strong
+membership management through user accounts, invitations,
+permission settings, and access control mechanisms.
+Collaborative groups can be created and managed easily, but
+participation is typically governed by a central authority or
+service provider.
+
+For example, \textit{Google Drive} and \textit{OneDrive}
+allow users to invite collaborators through email-based
+accounts and assign different access permissions.
+
+\subsubsection{Synchronization Model}
+These platforms provide automatic synchronization across
+multiple devices by maintaining a central copy of shared data.
+Updates are propagated through the cloud service and become
+available to collaborators once synchronization is completed.
+Such systems support multi-device collaboration, although they
+generally depend on connectivity to the central service.
+
+For example, a document modified in \textit{Google Drive}
+is uploaded to the cloud service and subsequently synchronized
+to other authorized devices connected to the same workspace.
+
+\subsubsection{History Management}
+Most centralized collaboration platforms provide basic version
+history and file recovery capabilities. Previous revisions can
+often be restored, but history management is usually less
+comprehensive than that offered by dedicated version control
+systems.
+
+For example, \textit{Google Drive} maintains previous
+revisions of documents and allows users to restore earlier
+versions when necessary.
+
+\subsubsection{File Support}
+Centralized collaboration platforms support a wide range of
+file types, including source code, documents, images,
+multimedia content, datasets, and other binary assets. They
+also support large files, although storage quotas and service
+limitations may affect practical usage.
+
+For example, \textit{Dropbox} and \textit{Nextcloud}
+can store source code, documents, images, videos, and other
+binary assets within the same shared workspace.
+
+\subsubsection{Filesystem Transparency and Usability}
+These systems generally provide strong filesystem transparency.
+Users interact with shared files through familiar folder-based
+interfaces and synchronization clients, allowing collaborative
+workflows to be integrated into normal file management
+practices with minimal additional training.
+
+For example, \textit{Dropbox} provides a synchronized local
+folder that can be accessed through standard filesystem
+operations without requiring users to interact directly with
+the underlying synchronization mechanisms.
+
+In summary, centralized collaboration platforms provide
+strong support for membership management, synchronization,
+file compatibility, and usability. Their centralized design
+simplifies collaboration and reduces the technical burden on
+users. However, these systems depend on centralized
+infrastructure for storage and coordination, which introduces
+reliance on external services and limits direct peer-to-peer
+collaboration.
+
+\subsection{Collaborative Version Control Systems}
+
+Representative examples of collaborative version control
+systems include \textit{Git}, \textit{Apache Subversion (SVN)},
+and \textit{Perforce}. \textit{Git} is a distributed version
+control system in which each participant maintains a local copy
+of the repository history. \textit{SVN} follows a centralized
+repository model, while \textit{Perforce} is commonly used in
+large-scale collaborative projects involving both source code
+and binary assets.
+
+\subsubsection{Membership Management}
+
+Collaborative version control systems support collaboration
+through shared repositories and controlled contribution
+workflows. Users can join projects, obtain repository access,
+and contribute changes according to repository permissions.
+
+For example, \textit{Git} repositories can be distributed among
+multiple collaborators, while centralized systems such as
+\textit{SVN} and \textit{Perforce} typically manage access
+through a central repository server.
+
+\subsubsection{Synchronization Model}
+
+Version control systems are not primarily designed for
+continuous file synchronization. Instead, changes are usually
+exchanged through explicit operations such as commits, pushes,
+updates, or pulls.
+
+For example, a modification made in \textit{Git} becomes
+available to other collaborators only after the change has
+been committed and shared through the repository workflow.
+Consequently, synchronization is typically user-driven rather
+than automatic.
+
+\subsubsection{History Management}
+
+History management is the primary strength of collaborative
+version control systems. These systems maintain detailed
+revision histories and provide mechanisms for reviewing,
+restoring, and comparing previous versions of files.
+
+For example, \textit{Git} records changes as commits and
+supports branching, merging, rollback, and conflict
+resolution. Similar capabilities are also provided by
+\textit{SVN} and \textit{Perforce} through their respective
+revision management workflows.
+
+\subsubsection{File Support}
+
+Version control systems can manage a wide variety of file
+types, including source code, documents, images, multimedia
+content, datasets, and binary assets.
+
+However, support for large files and frequently changing
+binary content varies significantly between systems. For
+example, \textit{Git} is primarily optimized for text-based
+artifacts such as source code, whereas \textit{Perforce}
+provides stronger support for large binary assets commonly
+encountered in game development and media production.
+
+
+\subsubsection{Filesystem Transparency and Usability}
+
+Version control systems typically require users to interact
+with repositories through dedicated workflows and tools.
+Operations such as committing, updating, merging, and
+resolving conflicts introduce additional complexity compared
+with ordinary file management.
+
+For example, users of \textit{Git} must explicitly manage
+repository state and revision history rather than relying on
+fully transparent background synchronization.
+
 \subsection{Centralized and Decentralized Collaboration}
 
 \subsection{Version Management and Synchronization}
