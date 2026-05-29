@@ -365,27 +365,579 @@ making local sharing technologies particularly suitable for
 quick exchanges between nearby devices.
 
 \subsection{Summary of Trade-offs}
+% Membership Management
+%     - Peer Discovery
+%     - Access Control
+%     - Group Formation
+%
+% Synchronization Model
+%     - Automatic Synchronization
+%     - Offline Support
+%     - Multi-Device Propagation
+%
+% History Management
+%     - Version History
+%     - Rollback
+%     - Conflict Resolution
+%
+% File Support
+%     - Heterogeneous Files
+%     - Large Files
+%
+% Filesystem Transparency and Usability
+%     - Native Filesystem Integration
+%     - Workflow Complexity
 
+The comparison presented in the previous subsections highlights
+that existing approaches emphasize different aspects of
+collaborative file management. Centralized collaboration
+platforms provide strong support for user management,
+synchronization, and usability. Collaborative version control
+systems offer comprehensive history management and conflict
+resolution capabilities. Peer-to-peer synchronization systems
+focus on decentralized synchronization and transparent
+filesystem integration, while local sharing technologies
+prioritize simplicity and direct device-to-device file
+transfer.
 
-\subsection{Evaluation of Existing Paradigms}
-\begin{enumerate}
-    \item \textbf{Cloud Directory Services} (e.g., Google Drive \cite{googledrive}, Dropbox \cite{dropbox}, Nextcloud): \\
-    These services rely on centralized cloud infrastructure. While they offer simple setup and ease of use, they suffer from high transfer latency, storage volume quotas, and strict dependency on external internet connectivity. Centralized hosting also raises user data privacy concerns and imposes access permissions that create collaboration bottlenecks for temporary teams.
-    
-    \item \textbf{Version Control Systems} (e.g., Git \cite{gitbook, github}, SVN): \\
-    VCS tools track repository history using directed acyclic graphs (DAGs). Although they provide powerful conflict resolution, change logs, and branch-level safety, they are designed for text-based source code. They do not handle large binary files well and require users to manually run staging, committing, and remote push/pull cycles. This workflow introduces steep learning curves for non-technical team members.
-    
-    \item \textbf{P2P File Synchronization} (e.g., Syncthing \cite{syncthing}, Resilio Sync \cite{resilio}): \\
-    Decentralized sync programs mirror directories directly between devices without central servers, avoiding cloud storage quotas and allowing high-speed local transfers. However, they lack integrated version rollback histories, making accidental file overwrites difficult to undo. Setup also requires manual node sharing and folder approvals, which adds configuration friction for short-term projects.
-\end{enumerate}
+To provide a consolidated view of these trade-offs,
+Tables~\ref{tab:comparison-membership},
+\ref{tab:comparison-sync},
+\ref{tab:comparison-history},
+\ref{tab:comparison-file}, and
+\ref{tab:comparison-usability}
+summarize the relative support provided by each approach
+across the evaluation dimensions introduced in
+Section~3.1. The qualitative ratings used in the comparison
+are defined in Table~\ref{tab:rating-scale}.
 
-\subsection{Key Product Differences: Syncthing vs. Resilio Sync}
-We analyze the differences between the leading peer-to-peer synchronization tools to clarify our design choices:
-\begin{itemize}
-    \item \textbf{Architecture and Openness:} Syncthing is open-source and uses the public Block Exchange Protocol (BEP). It enforces a strict security model where devices must exchange long cryptographic IDs and mutually approve folder invitations. Resilio Sync is proprietary, based on the BitTorrent protocol, and supports selective sync, but has commercial license limits and proprietary lock-in.
-    \item \textbf{Lightweight Collaboration Gap:} Both tools act as generic directory mirrors rather than project-specific workspaces. They lack automated, non-destructive version histories that team members can navigate easily. If a peer saves a broken draft, that file immediately overwrites the state of all other online peers, requiring complex administrative configuration to recover.
-\end{itemize}
+\begin{table}[htbp]
+\centering
+\caption{Qualitative Rating Scale}
+\label{tab:rating-scale}
 
+\begin{tabular}{cc}
+\toprule
+\textbf{Rating} & \textbf{Meaning} \\
+\midrule
+\high & Strong support for the capability \\
+\partialsupport & Partial support with notable limitations \\
+\limited & Basic or restricted support \\
+\none & Capability not provided \\
+\bottomrule
+\end{tabular}
+\end{table}
+\begin{table}[htbp]
+\centering
+\caption{Comparison of Existing Approaches: Membership Management}
+\label{tab:comparison-membership}
+
+\begin{tabular}{
+C{2.3cm}
+C{2.3cm}
+C{3.2cm}
+C{3.2cm}
+C{3.2cm}
+}
+\toprule
+
+\textbf{Category}
+&
+\textbf{System}
+&
+\makecell{\textbf{Peer}\\\textbf{Discovery}}
+&
+\makecell{\textbf{Access}\\\textbf{Control}}
+&
+\makecell{\textbf{Group}\\\textbf{Formation}}
+
+\\
+
+\midrule
+
+\multirow{4}{*}{Centralized}
+& \textit{Google Drive}
+& \limited
+& \high
+& \high
+\\
+
+& \textit{OneDrive}
+& \limited
+& \high
+& \high
+\\
+
+& \textit{Dropbox}
+& \limited
+& \high
+& \high
+\\
+
+& \textit{Nextcloud}
+& \limited
+& \high
+& \partialsupport
+\\
+
+\midrule
+
+\multirow{3}{*}{Version Control}
+& \textit{Git}
+& \none
+& \none
+& \limited
+\\
+
+& \textit{SVN}
+& \none
+& \high
+& \limited
+\\
+
+& \textit{Perforce}
+& \none
+& \high
+& \limited
+\\
+
+\midrule
+
+\multirow{2}{*}{P2P Sync}
+& \textit{Syncthing}
+& \high
+& \partialsupport
+& \partialsupport
+\\
+
+& \textit{Resilio Sync}
+& \partialsupport
+& \partialsupport
+& \partialsupport
+\\
+
+\midrule
+
+\multirow{2}{*}{Local Sharing}
+& \textit{AirDrop}
+& \high
+& \none
+& \limited
+\\
+
+& \textit{Nearby Share}
+& \high
+& \none
+& \limited
+\\
+
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\caption{Comparison of Existing Approaches: Synchronization Model}
+\label{tab:comparison-sync}
+
+\begin{tabular}{
+C{2.3cm}
+C{2.3cm}
+C{3.2cm}
+C{3.2cm}
+C{3.2cm}
+}
+\toprule
+
+\textbf{Category}
+&
+\textbf{System}
+&
+\makecell{\textbf{Automatic}\\\textbf{Synchronization}}
+&
+\makecell{\textbf{Offline}\\\textbf{Operation}}
+&
+\makecell{\textbf{Multi-Device}\\\textbf{Synchronization}}
+
+\\
+
+\midrule
+
+\multirow{4}{*}{Centralized}
+& \textit{Google Drive}
+& \high
+& \limited
+& \high
+\\
+
+& \textit{OneDrive}
+& \high
+& \limited
+& \high
+\\
+
+& \textit{Dropbox}
+& \high
+& \limited
+& \high
+\\
+
+& \textit{Nextcloud}
+& \high
+& \partialsupport
+& \high
+\\
+
+\midrule
+
+\multirow{3}{*}{Version Control}
+& \textit{Git}
+& \none
+& \high
+& \partialsupport
+\\
+
+& \textit{SVN}
+& \none
+& \limited
+& \partialsupport
+\\
+
+& \textit{Perforce}
+& \none
+& \limited
+& \partialsupport
+\\
+
+\midrule
+
+\multirow{2}{*}{P2P Sync}
+& \textit{Syncthing}
+& \high
+& \high
+& \high
+\\
+
+& \textit{Resilio Sync}
+& \high
+& \high
+& \high
+\\
+
+\midrule
+
+\multirow{2}{*}{Local Sharing}
+& \textit{AirDrop}
+& \none
+& \none
+& \none
+\\
+
+& \textit{Nearby Share}
+& \none
+& \none
+& \none
+\\
+
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\caption{Comparison of Existing Approaches: History Management}
+\label{tab:comparison-history}
+
+\begin{tabular}{
+C{2.3cm}
+C{2.3cm}
+C{3.2cm}
+C{3.2cm}
+C{3.2cm}
+}
+\toprule
+
+\textbf{Category}
+&
+\textbf{System}
+&
+\makecell{\textbf{Version}\\\textbf{History}}
+&
+\makecell{\textbf{Rollback}}
+&
+\makecell{\textbf{Conflict}\\\textbf{Resolution}}
+
+\\
+
+\midrule
+
+\multirow{4}{*}{Centralized}
+& \textit{Google Drive}
+& \limited
+& \limited
+& \limited
+\\
+
+& \textit{OneDrive}
+& \limited
+& \limited
+& \limited
+\\
+
+& \textit{Dropbox}
+& \limited
+& \limited
+& \limited
+\\
+
+& \textit{Nextcloud}
+& \partialsupport
+& \partialsupport
+& \limited
+\\
+
+\midrule
+
+\multirow{3}{*}{Version Control}
+& \textit{Git}
+& \high
+& \high
+& \high
+\\
+
+& \textit{SVN}
+& \high
+& \high
+& \high
+\\
+
+& \textit{Perforce}
+& \high
+& \high
+& \high
+\\
+
+\midrule
+
+\multirow{2}{*}{P2P Sync}
+& \textit{Syncthing}
+& \partialsupport
+& \partialsupport
+& \limited
+\\
+
+& \textit{Resilio Sync}
+& \partialsupport
+& \partialsupport
+& \limited
+\\
+
+\midrule
+
+\multirow{2}{*}{Local Sharing}
+& \textit{AirDrop}
+& \none
+& \none
+& \none
+\\
+
+& \textit{Nearby Share}
+& \none
+& \none
+& \none
+\\
+
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\caption{Comparison of Existing Approaches: File Support}
+\label{tab:comparison-file}
+
+\begin{tabular}{
+C{2.3cm}
+C{2.3cm}
+C{3.2cm}
+C{3.2cm}
+}
+\toprule
+
+\textbf{Category}
+&
+\textbf{System}
+&
+\makecell{\textbf{Heterogeneous}\\\textbf{Files}}
+&
+\makecell{\textbf{Large}\\\textbf{Files}}
+
+\\
+
+\midrule
+
+\multirow{4}{*}{Centralized}
+& \textit{Google Drive}
+& \high
+& \partialsupport
+\\
+
+& \textit{OneDrive}
+& \high
+& \partialsupport
+\\
+
+& \textit{Dropbox}
+& \high
+& \partialsupport
+\\
+
+& \textit{Nextcloud}
+& \high
+& \high
+\\
+
+\midrule
+
+\multirow{3}{*}{Version Control}
+& \textit{Git}
+& \partialsupport
+& \limited
+\\
+
+& \textit{SVN}
+& \partialsupport
+& \partialsupport
+\\
+
+& \textit{Perforce}
+& \high
+& \high
+\\
+
+\midrule
+
+\multirow{2}{*}{P2P Sync}
+& \textit{Syncthing}
+& \high
+& \high
+\\
+
+& \textit{Resilio Sync}
+& \high
+& \high
+\\
+
+\midrule
+
+\multirow{2}{*}{Local Sharing}
+& \textit{AirDrop}
+& \high
+& \high
+\\
+
+& \textit{Nearby Share}
+& \high
+& \high
+\\
+
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\caption{Comparison of Existing Approaches: Filesystem Transparency and Usability}
+\label{tab:comparison-usability}
+
+\begin{tabular}{
+C{2.3cm}
+C{2.3cm}
+C{3.2cm}
+C{3.2cm}
+}
+\toprule
+
+\textbf{Category}
+&
+\textbf{System}
+&
+\makecell{\textbf{Filesystem}\\\textbf{Integration}}
+&
+\makecell{\textbf{Ease}\\\textbf{of Use}}
+
+\\
+
+\midrule
+
+\multirow{4}{*}{Centralized}
+& \textit{Google Drive}
+& \high
+& \high
+\\
+
+& \textit{OneDrive}
+& \high
+& \high
+\\
+
+& \textit{Dropbox}
+& \high
+& \high
+\\
+
+& \textit{Nextcloud}
+& \high
+& \partialsupport
+\\
+
+\midrule
+
+\multirow{3}{*}{Version Control}
+& \textit{Git}
+& \limited
+& \limited
+\\
+
+& \textit{SVN}
+& \limited
+& \limited
+\\
+
+& \textit{Perforce}
+& \limited
+& \limited
+\\
+
+\midrule
+
+\multirow{2}{*}{P2P Sync}
+& \textit{Syncthing}
+& \high
+& \high
+\\
+
+& \textit{Resilio Sync}
+& \high
+& \high
+\\
+
+\midrule
+
+\multirow{2}{*}{Local Sharing}
+& \textit{AirDrop}
+& \high
+& \high
+\\
+
+& \textit{Nearby Share}
+& \high
+& \high
+\\
+
+\bottomrule
+\end{tabular}
+\end{table}
 % NOTE: This part should be moved to positioning...
 % \subsection{Proposed P2P Synchronization System}
 % To address these limitations, we propose a serverless local directory synchronization system. It combines the direct transfer speed of P2P mirroring with the version safety of a lightweight revision tool. The proposed system features:

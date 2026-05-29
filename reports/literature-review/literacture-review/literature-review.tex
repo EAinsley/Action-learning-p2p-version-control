@@ -5,12 +5,21 @@
 \usepackage{cite}
 \usepackage{booktabs}
 \usepackage{array}
-\usepackage{xcolor}
+% \usepackage{xcolor}
+\usepackage[table]{xcolor}
 \usepackage{fancyhdr}
 \usepackage{lastpage}
 \usepackage{float}
 \usepackage{longtable}
 \usepackage{url}
+\usepackage{multirow}
+\usepackage{booktabs}
+\usepackage{makecell}
+\newcolumntype{C}[1]{>{\centering\arraybackslash}p{#1}}
+\newcommand{\high}{\cellcolor{green!25}High}
+\newcommand{\partialsupport}{\cellcolor{yellow!25}Partial}
+\newcommand{\limited}{\cellcolor{orange!25}Limited}
+\newcommand{\none}{\cellcolor{gray!25}None}
 
 % Color definitions
 \definecolor{darkblue}{rgb}{0.0, 0.0, 0.5}
@@ -32,13 +41,13 @@
 \date{\today}
 
 % Custom column type for better table layout
-\newcolumntype{L}{>{\raggedright\arraybackslash}p{2.5cm}}
-\newcolumntype{Y}{>{\centering\arraybackslash}p{1.1cm}}
-\newcolumntype{N}{>{\centering\arraybackslash}p{2.0cm}}
-\newcolumntype{C}{>{\raggedright\arraybackslash}p{2.5cm}}
-\newcolumntype{D}{>{\raggedright\arraybackslash}p{3.1cm}}
-\newcolumntype{K}{>{\raggedright\arraybackslash}p{1.9cm}}
-\newcolumntype{U}{>{\raggedright\arraybackslash}p{2.1cm}}
+% \newcolumntype{L}{>{\raggedright\arraybackslash}p{2.5cm}}
+% \newcolumntype{Y}{>{\centering\arraybackslash}p{1.1cm}}
+% \newcolumntype{N}{>{\centering\arraybackslash}p{2.0cm}}
+% \newcolumntype{C}{>{\raggedright\arraybackslash}p{2.5cm}}
+% \newcolumntype{D}{>{\raggedright\arraybackslash}p{3.1cm}}
+% \newcolumntype{K}{>{\raggedright\arraybackslash}p{1.9cm}}
+% \newcolumntype{U}{>{\raggedright\arraybackslash}p{2.1cm}}
 
 \begin{document}
 
