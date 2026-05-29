@@ -22,9 +22,9 @@ From this objective, the problem can be defined as the design of a peer-to-peer 
 
 % TODO: After finishing the later chapter, I feel that we need to adjust the following structure
 % The main dimention should be:
-% - Peer Discovery (Membership Management)
+% - Membership Management
 % - Synchronization
-% - Version Recovery
+% - Version Control 
 % - Transparent Filesystem Integration (UX important)
 % - File support
 % And we will have sub-goal for part of it:
@@ -32,22 +32,54 @@ From this objective, the problem can be defined as the design of a peer-to-peer 
 % - Large File Support
 % - Dynamic Membership
 \begin{itemize}
-\item \textbf{Local peer discovery and dynamic membership.}
-The system must discover available peers on the same local network without relying on a central server. It should also support dynamic participation, where peers may join, leave, or temporarily disconnect during collaboration.
 
-\item \textbf{Directory-level change detection and propagation.}
-The system must monitor a shared local directory and detect file creation, modification, and deletion events. These changes should be propagated to other online peers without requiring users to manually upload, download, or explicitly send files.
+\item \textbf{Membership Management.}
 
-\item \textbf{Rapid synchronization among online peers.}
-When a change occurs, the system should synchronize the updated state to other available peers within a short delay, so that collaborators can observe a consistent project workspace during active collaboration.
+The system must allow collaborators to discover peers,
+establish sharing relationships, and manage participation in
+a shared workspace without relying on centralized account
+management. It should support dynamic membership, allowing
+peers to join, leave, or temporarily disconnect during
+collaboration.
 
-\item \textbf{Support for heterogeneous file types and large files.}
-The system must handle different categories of project files, including text files, source code, documents, images, and binary files. For large files, the system should support efficient transfer mechanisms rather than assuming that every file can be sent as a single small message.
+\item \textbf{Peer-to-Peer Synchronization}
 
-\item \textbf{Simple versioning and rollback.}
-Before a file is overwritten by a synchronized update, the system should preserve an older copy or historical state. This provides a basic recovery mechanism against accidental overwrites, incorrect updates, or unintended file changes.
+The system must automatically propagate updates among
+participating peers without requiring manual file exchange.
+It should support multi-peer collaboration, tolerate
+temporary peer disconnections, and maintain a reasonably
+consistent shared workspace during active collaboration.
 
-\item \textbf{Transparent integration with the local file system.}
-The shared workspace should behave like a normal directory on the user's computer. Users should be able to create, edit, move, and delete files using their usual tools, while synchronization and version management are handled by the system in the background.
+\item \textbf{Version Management.}
+
+The system must provide lightweight version management and
+rollback capabilities. Before a synchronized update
+overwrites an existing file, an earlier state should be
+preserved to allow recovery from accidental modifications,
+incorrect updates, or synchronization errors.
+
+\item \textbf{Heterogeneous File Support.}
+
+The system must support heterogeneous project artifacts,
+including source code, documents, images, multimedia content,
+datasets, and other binary files. In addition, large files
+should be transferred efficiently without assuming that all
+data can be exchanged through small messages.
+
+\item \textbf{Transparent Filesystem Integration.}
+
+The shared workspace should behave like a normal directory on
+the user's computer. Users should be able to create, edit,
+move, and delete files using their existing tools, while
+synchronization and version management are handled
+transparently in the background.
+
 \end{itemize}
-Therefore, the central technical problem is to provide a serverless, peer-to-peer, directory-level synchronization mechanism that supports dynamic local-network collaboration, heterogeneous file transfer, rapid update propagation, and basic version recovery while preserving the simplicity of a normal local folder. 
+
+Therefore, the central technical problem is to design a
+serverless peer-to-peer directory synchronization system that
+provides effective membership management, automatic
+synchronization, lightweight history management, support for
+heterogeneous project files, and transparent filesystem
+integration while preserving the simplicity of ordinary local
+folder-based collaboration.
