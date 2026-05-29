@@ -1,0 +1,24 @@
+\section{Key References}
+
+The following six publications serve as the primary theoretical and technical foundation for our proposed system's architecture and design choices.
+
+\begin{enumerate}
+    \item \textbf{RFC 6762 \& RFC 6763 (Stuart Cheshire and Marc Krochmal, 2013)} \cite{rfc6762, rfc6763} \\
+    These specifications define Multicast DNS (mDNS) and DNS-Based Service Discovery (DNS-SD), which form the basis for zero-configuration networking. They demonstrate how local devices can advertise and resolve services without a centralized DNS server. We use these protocols to plan our Go-based peer discovery component, allowing team members on the same local network to connect automatically and sync directories without manual setup.
+
+    \item \textbf{Leslie Lamport (1978) - ``Time, Clocks, and the Ordering of Events in a Distributed System''} \cite{lamport1978} \\
+    This paper introduces logical clocks to track event ordering and causality in distributed systems where physical clocks cannot be synchronized. It provides the foundation for our synchronization logic. We plan to attach a single logical timestamp counter to each file metadata entry. This enables our Go coordinator to detect concurrent modifications and resolve update sequencing chronologically without the complexity of full vector clocks.
+
+    \item \textbf{Seth Gilbert and Nancy Lynch (2002) - ``Brewer's Conjecture and the Feasibility of Consistent, Available, Partition-Tolerant Web Services''} \cite{brewer2002} \\
+    This work provides the formal proof of the CAP Theorem, showing that a distributed system cannot guarantee consistency, availability, and partition tolerance simultaneously. This theorem guides our architectural choice to prioritize availability. We allow peers to edit files locally while offline and reconcile changes eventually upon reconnection, which fits the dynamic connection cycles of student teams.
+
+    \item \textbf{Marc Shapiro et al. (2011) - ``A Comprehensive Study of Convergent and Commutative Replicated Data Types''} \cite{shapiro2011} \\
+    This research report analyzes CRDTs, demonstrating how data structures can achieve eventual consistency mathematically without consensus protocols. While we adopt a simpler Last-Write-Wins policy for our initial release to reduce complexity, this study serves as our design roadmap, ensuring our SQLite schema and Go metadata models can support state-based CRDTs in future iterations.
+
+    \item \textbf{Andrew Tridgell and Paul Mackerras (1996) - ``The Rsync Algorithm''} \cite{rsync1996} \\
+    This paper presents a rolling-checksum algorithm that synchronizes directories by transferring only modified file blocks. It forms the basis of our planned bandwidth optimization. In our design, we begin with whole-file transfer pipelines, and plan to integrate this block-level delta sync in a later phase to optimize local WLAN usage for large binary assets.
+
+    \item \textbf{Karin Petersen et al. (1995) - ``Managing Update Conflicts in Bayou, a Weakly Connected Replicated Storage System''} \cite{bayou1995} \\
+    This paper explores conflict management and reconciliation in weakly connected replicated storage systems. It introduces conflict detection and resolution policies, informing our decision to combine an automated Last-Write-Wins (LWW) resolution rule with local backup preservation. This ensures predictable reconciliation while keeping older file versions accessible to prevent accidental data loss.
+\end{enumerate}
+

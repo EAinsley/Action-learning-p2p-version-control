@@ -1,0 +1,21 @@
+\section{Conclusion}
+
+\subsection{Literature Review Synthesis}
+Our analysis of distributed systems literature highlights that building a serverless, local directory sync tool requires combining data-integrity algorithms with network and clock synchronization standards. mDNS and DNS-SD \cite{rfc6762, rfc6763} remove the need for central registry servers, while logical clocks \cite{lamport1978} establish event ordering in decentralized networks. Because partitions are expected on local subnets, the CAP Theorem \cite{brewer2002} suggests prioritizing availability and eventual convergence. Deterministic resolution policies combined with version backups \cite{bayou1995} provide a safe conflict-handling baseline, with CRDTs \cite{shapiro2011} offering a path toward automatic conflict-free convergence.
+
+\subsection{Influence on Design}
+The literature shapes our proposed Go/C++ architecture:
+\begin{itemize}
+    \item We plan to use mDNS/DNS-SD (via Go) to automate local network peer discovery, removing setup friction.
+    \item We plan to use logical timestamps (Lamport clocks) and a Last-Write-Wins conflict resolution policy to manage concurrent edits predictably.
+    \item We plan to favor local availability, ensuring users can work offline and sync differences upon reconnection.
+    \item We plan a split where Go handles network coordination and C++ handles OS-level file watching (inotify \cite{inotify7}, FSEvents \cite{fsevents}) and hashing (SHA-256 \cite{fips1804}) over reliable TCP sockets \cite{rfc9293}.
+\end{itemize}
+
+\subsection{Limitations and Future Work}
+While our current design provides a synchronization baseline, we recognize limitations in bandwidth usage and conflict handling. Whole-file transfers are simple to implement but inefficient for large assets. Our next steps are:
+\begin{itemize}
+    \item Implement the Go-to-C++ socket handover pipeline to connect the network and storage layers.
+    \item Implement the rsync-style rolling checksum algorithm \cite{rsync1996} in C++ to enable delta transfers.
+    \item Introduce state-based CRDT schemas \cite{shapiro2011} in Go to support automatic, conflict-free metadata merging.
+\end{itemize}

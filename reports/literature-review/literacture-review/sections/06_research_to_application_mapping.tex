@@ -1,0 +1,53 @@
+\section{Research to Application Mapping}
+
+To translate academic theories into our proposed architecture, we map eight core research insights to planned components in our Go/C++ design:
+
+\begin{enumerate}
+    \item \textbf{Zero-Configuration Peer Discovery on LAN}
+    \begin{itemize}
+        \item \textbf{Research Insight:} Cheshire and Krochmal \cite{rfc6762, rfc6763} establish that Multicast DNS (mDNS) and DNS-Based Service Discovery (DNS-SD) enable serverless local service registration and resolution using standard IP multicast queries.
+        \item \textbf{Application in Project:} We plan a Go-based peer discovery component that broadcasts service records under the \texttt{\_p2psync.\_tcp} domain and dynamically browses the local subnet to resolve peer addresses, removing the need for manual configuration.
+    \end{itemize}
+
+    \item \textbf{Causal Ordering of Concurrent Updates}
+    \begin{itemize}
+        \item \textbf{Research Insight:} Lamport \cite{lamport1978} demonstrates that logical clocks and causal relation tracking can order events in a distributed system without relying on synchronized physical clocks.
+        \item \textbf{Application in Project:} We plan to attach per-file logical timestamps (Lamport clocks) to track change sequences and detect concurrent modifications, avoiding the state and coordination overhead of vector clocks for the initial release.
+    \end{itemize}
+
+    \item \textbf{Consistency Strategies under Network Partitions}
+    \begin{itemize}
+        \item \textbf{Research Insight:} Gilbert and Lynch's proof of the CAP Theorem \cite{brewer2002} establishes that distributed systems must trade consistency for availability during network partitions.
+        \item \textbf{Application in Project:} We choose availability by allowing peers to make local modifications offline. When connection is restored, a resync process runs to resolve conflicts and converge on a common state.
+    \end{itemize}
+
+    \item \textbf{Conflict Handling and Durability}
+    \begin{itemize}
+        \item \textbf{Research Insight:} Replicated storage systems like Bayou \cite{bayou1995} demonstrate that resolving conflicts requires deterministic policies paired with non-destructive version backups to ensure data durability.
+        \item \textbf{Application in Project:} We plan to use a Last-Write-Wins (LWW) policy based on logical timestamps. Before overwriting a local file, we plan to store a backup copy to protect against data loss.
+    \end{itemize}
+
+    \item \textbf{Conflict-Free Convergence Evolution}
+    \begin{itemize}
+        \item \textbf{Research Insight:} Shapiro et al. \cite{shapiro2011} prove that Conflict-Free Replicated Data Types (CRDTs) allow concurrent updates to merge automatically and converge mathematically.
+        \item \textbf{Application in Project:} We plan to use LWW for the initial release to reduce complexity, but construct our SQLite metadata schema and Go coordination logic to support state-based CRDTs in future versions.
+    \end{itemize}
+
+    \item \textbf{Bandwidth-Efficient Synchronization}
+    \begin{itemize}
+        \item \textbf{Research Insight:} Tridgell and Mackerras \cite{rsync1996} show that rolling checksums allow remote directories to synchronize by transferring only modified blocks instead of entire files.
+        \item \textbf{Application in Project:} We plan to start with whole-file transfers for simplicity. In a later optimization phase, we will add block-level diffing to minimize local WLAN bandwidth use.
+    \end{itemize}
+
+    \item \textbf{Kernel-Level File Watching}
+    \begin{itemize}
+        \item \textbf{Research Insight:} Operating system event APIs like Linux's inotify \cite{inotify7} and macOS's FSEvents \cite{fsevents} provide kernel-level event streams for file additions, modifications, and deletions without the overhead of periodic polling.
+        \item \textbf{Application in Project:} We plan a C++ file watcher daemon that uses native OS APIs (inotify and FSEvents) to detect directory events with minimal CPU overhead, notifying the Go coordination engine via IPC.
+    \end{itemize}
+
+    \item \textbf{Data Integrity and Reliable Transport}
+    \begin{itemize}
+        \item \textbf{Research Insight:} Cryptographic hashing standard SHA-256 \cite{fips1804} provides unique content identifiers that verify data integrity, while the Transmission Control Protocol (TCP) \cite{rfc9293} guarantees reliable, ordered packet delivery.
+        \item \textbf{Application in Project:} We plan to let the C++ daemon hash local files for change verification, and let the Go network coordinator transfer files over TCP sockets to ensure error-free replication.
+    \end{itemize}
+\end{enumerate}
