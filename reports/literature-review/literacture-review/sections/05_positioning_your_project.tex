@@ -1,7 +1,29 @@
 \section{Positioning Your Project}
 
+Our project introduces a lightweight, serverless local directory synchronization tool that bridges the gap between generic peer-to-peer file replication and collaborative version control safety. 
+
 \subsection{Key Differentiators}
-\textit{TODO (team): add key differentiators.}
+Unlike existing solutions that require dedicated cloud infrastructure or introduce complex manual workflows, our proposed system focuses on:
+\begin{itemize}
+    \item \textbf{Autonomous LAN Operation:} Operating entirely on the local subnet via mDNS/DNS-SD discovery, eliminating reliance on external servers or internet connectivity.
+    \item \textbf{Minimalist Configuration:} Replaces manual peer ID exchanges and folder sharing invitations (as required by Syncthing) with automatic, zero-configuration local mesh discovery.
+    \item \textbf{Integrated Version Backups:} Provides automatic version archiving in a local history folder before any synchronization overwrite, protecting users from accidental data loss.
+    \item \textbf{Low-Overhead Hybrid Architecture:} Uses Go's concurrency primitives for network multiplexing and C++'s direct kernel-level file watchers for low-resource filesystem scanning.
+\end{itemize}
+
 
 \subsection{Design Philosophy}
-\textit{TODO (team): add design philosophy.}
+Our design prioritizes three core principles:
+\begin{itemize}
+    \item \textbf{Simplicity:} The synchronization process should run transparently in the background, behaving like a normal local directory without requiring staging, commits, or merge cycles.
+    \item \textbf{Durability:} Automating file replication should not risk data loss. Every overwrite is preceded by a local version backup, ensuring user modifications can be rolled back.
+    \item \textbf{Performance:} The system must minimize CPU and memory footprint on client machines, achieved by delegating performance-critical hashing and watching to optimized C++ code.
+\end{itemize}
+\subsection{Proposed P2P Synchronization System}
+The proposed architecture combines a Go-based networking daemon (handling discovery, synchronization logic, and IPC server) with a C++ storage daemon (handling file watching, memory-mapped SHA-256 hashing, and file writes). The Go daemon establishes TCP connection pools with discovered peers, coordinates file versions, and hands over sockets to C++ for direct-to-disk streaming when updates are required.
+\subsection{Core Project Hypotheses}
+We formulate the following testable scientific hypotheses to guide the evaluation of our proposed system:
+\begin{itemize}
+    \item \textbf{Primary Hypothesis ($H_1$):} A localized, serverless synchronization architecture using mDNS/DNS-SD discovery and direct TCP socket replication can achieve sub-second average synchronization latency on standard local area networks (WLAN) without reliance on external cloud infrastructure.
+    \item \textbf{Secondary Hypothesis ($H_2$):} Utilizing a single logical timestamp (Lamport clock) counter per file, paired with a deterministic Last-Write-Wins (LWW) resolution rule and local file backups, provides sufficient consistency and rollback recovery for small-scale collaborative teams (3–5 peers) while avoiding the state and computational overhead of vector clocks or CRDTs.
+\end{itemize}
