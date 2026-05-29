@@ -275,6 +275,95 @@ This approach provides strong filesystem transparency and
 requires relatively little workflow adaptation compared with
 traditional version control systems.
 
+\subsection{Local Sharing Technologies}
+
+Representative examples of local sharing technologies include
+\textit{AirDrop} and \textit{Nearby Share}. These systems are
+designed to enable direct file exchange between nearby devices
+without requiring users to upload data to a centralized cloud
+service.
+
+Unlike peer-to-peer synchronization systems, local sharing
+technologies primarily focus on one-time file transfers rather
+than maintaining continuously synchronized directories. They
+are commonly used for temporary file exchange and short-term
+collaboration among nearby users.
+
+\subsubsection{Membership Management}
+
+Local sharing technologies generally provide lightweight
+mechanisms for discovering nearby devices and initiating file
+transfers. Membership is typically established on demand when a
+user chooses to share a file with another device.
+
+For example, \textit{AirDrop} automatically discovers nearby
+Apple devices and allows users to approve incoming transfer
+requests. Similarly, \textit{Nearby Share} enables temporary
+sharing relationships between nearby Android and desktop
+devices.
+
+Compared with other collaborative approaches, membership
+management is simple and requires minimal configuration.
+However, these relationships are usually temporary and do not
+persist beyond individual file transfers.
+
+\subsubsection{Synchronization Model}
+
+Local sharing technologies are not designed to maintain
+synchronized copies of files across multiple devices. Instead,
+they focus on transferring files from one device to another as
+individual sharing operations.
+
+For example, after a file has been transferred using
+\textit{AirDrop}, subsequent modifications are not propagated
+automatically. Additional transfers must be initiated manually
+whenever updated versions need to be shared.
+
+As a result, these systems provide direct and efficient file
+exchange but do not support continuous synchronization or
+multi-device replication.
+
+\subsubsection{History Management}
+
+Local sharing technologies generally provide little or no
+support for history management. Files are transferred as
+standalone artifacts, and previous versions are not tracked by
+the sharing mechanism itself.
+
+For example, neither \textit{AirDrop} nor \textit{Nearby Share}
+maintains revision histories, rollback mechanisms, or conflict
+resolution facilities. Any version management must therefore be
+performed by external tools or by users manually.
+
+\subsubsection{File Support}
+
+Local sharing technologies typically support a wide range of
+file types, including documents, source code, images,
+multimedia content, datasets, and other binary assets.
+
+For example, \textit{AirDrop} can transfer photos, videos,
+documents, and application-specific files directly between
+devices. Similar support is provided by \textit{Nearby Share}.
+
+Because files are transferred directly rather than processed by
+a synchronization service, heterogeneous file types are
+generally handled without special restrictions.
+
+\subsubsection{Filesystem Transparency and Usability}
+
+Local sharing technologies are designed for simplicity and ease
+of use. File transfers are usually initiated through familiar
+graphical interfaces and require little technical knowledge.
+
+For example, users can share files through operating-system
+integration in \textit{AirDrop} and \textit{Nearby Share}
+without interacting with specialized collaboration workflows or
+repository management tools.
+
+This approach provides strong usability and low setup effort,
+making local sharing technologies particularly suitable for
+quick exchanges between nearby devices.
+
 \subsection{Summary of Trade-offs}
 
 
