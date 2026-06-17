@@ -30,17 +30,20 @@ src/backend/cpp/
 - **Internet connection** (to fetch dependencies via FetchContent)
 
 ### Linux
+
 ```bash
 sudo apt-get install build-essential cmake
 ```
 
 ### macOS
+
 ```bash
 # Install Xcode Command Line Tools
 xcode-select --install
 ```
 
 ### Windows
+
 ```
 Visual Studio 2019+ with C++ development tools
 ```
@@ -60,6 +63,20 @@ cmake --build .
 ### Output
 
 The binary will be created at: `build/bin/cpp_daemon`
+
+### Testing
+
+```bash
+ctest --test-dir build --output-on-failure
+```
+
+### Running
+
+```bash
+./build/bin/cpp_daemon
+```
+
+for seeing the usage.
 
 ## Usage
 
@@ -100,115 +117,3 @@ Press Ctrl+C to stop
 - **Linux**: inotify (kernel API, no external dependency)
 - **macOS**: FSEvents (system framework)
 - **Windows**: ReadDirectoryChangesW (Windows API)
-
-## Implementation Status
-
-### Current Status: Skeleton
-
-The current implementation provides:
-- ✓ Cross-platform compilation framework
-- ✓ Command-line argument parsing
-- ✓ Signal handling (Ctrl+C)
-- ✓ Abstract interface for file watching
-- ✓ Platform-specific class stubs
-- ⏳ **TODO**: Platform-specific implementations
-
-### Next Steps
-
-1. **Linux**: Implement inotify-based event monitoring
-2. **macOS**: Implement FSEvents-based event monitoring
-3. **Windows**: Implement ReadDirectoryChangesW event monitoring
-4. **Testing**: Add unit tests for each platform
-5. **IPC Integration**: Connect to Go daemon via Unix socket
-
-## Code Structure
-
-### main.cpp
-
-- `FileSystemWatcher`: Abstract base class defining watcher interface
-- `FileSystemWatcherLinux`: Linux implementation (stub)
-- `FileSystemWatcherMacOS`: macOS implementation (stub)
-- `FileSystemWatcherWindows`: Windows implementation (stub)
-- `create_watcher()`: Factory function for platform-specific watcher
-- `main()`: Entry point with CLI argument parsing
-
-### Platform-Specific Files
-
-Each platform file contains:
-- TODO comments with implementation steps
-- API reference information
-- Stub structure ready for implementation
-
-## Building with Compiler Warnings
-
-The build is configured to show all warnings:
-
-```bash
-# Linux/macOS
-g++ -Wall -Wextra -Wpedantic ...
-
-# Windows
-cl /W4 ...
-```
-
-## Debugging
-
-### Verbose Build Output
-
-```bash
-cd build
-cmake --build . --verbose
-```
-
-### Run with Debug Information
-
-```bash
-# On Linux/macOS
-./build/bin/cpp_daemon /tmp/test 2>&1 | grep -E "\[|ERROR|WARNING"
-
-# On Windows
-build\bin\cpp_daemon C:\Temp\test
-```
-
-## Next Implementation: File Watcher
-
-### Linux (inotify)
-
-```cpp
-// Steps to implement:
-// 1. Create inotify file descriptor: int fd = inotify_init();
-// 2. Add directory watch: int wd = inotify_add_watch(fd, path, IN_CREATE | IN_MOVED_TO);
-// 3. Read events in loop: while (read(fd, buffer, BUF_LEN) > 0)
-// 4. Parse inotify_event structures
-// 5. Call callback for new files
-```
-
-### macOS (FSEvents)
-
-```cpp
-// Steps to implement:
-// 1. Create event stream: FSEventStreamRef stream = FSEventStreamCreate(...)
-// 2. Define callback to handle path changes
-// 3. Schedule in run loop: FSEventStreamScheduleWithRunLoop(...)
-// 4. Start stream: FSEventStreamStart(stream)
-// 5. Process events via run loop
-```
-
-### Windows (ReadDirectoryChangesW)
-
-```cpp
-// Steps to implement:
-// 1. Open directory: HANDLE hDir = CreateFileA(path, FILE_LIST_DIRECTORY, ...)
-// 2. Call ReadDirectoryChangesW in loop
-// 3. Parse FILE_NOTIFY_INFORMATION structures
-// 4. Filter for FILE_ACTION_ADDED events
-// 5. Close handle when done
-```
-
-## License
-
-Part of the P2P File Sync project.
-
-## Support
-
-See the main project architecture document at: `reports/architecture/p2p_architecture.md`

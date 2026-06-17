@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_package(nlohmann_json 3.12.0 REQUIRED)
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
 include(FetchContent)
 
 # Main executable - Linux only
@@ -35,3 +36,13 @@ set_target_properties(cpp_daemon PROPERTIES
 
 message(STATUS "Building C++ daemon for Linux (inotify)")
 message(STATUS "Output: ${CMAKE_BINARY_DIR}/bin/cpp_daemon")
+
+
+enable_testing()
+add_test(
+    NAME daemon_file_create_test
+    COMMAND
+        ${Python3_EXECUTABLE}
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_daemon_file_create.py
+        $<TARGET_FILE:cpp_daemon>
+)
