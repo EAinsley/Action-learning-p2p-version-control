@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"sync"
 	"time"
 
@@ -17,19 +18,25 @@ import (
 
 // SyncCoordinator coordinates multi-repository synchronization across the local
 // C++ daemon and P2P network.
+type pendingDownload struct {
+	size   int64
+	repoID string
+}
+
 type SyncCoordinator struct {
-	db              *sqlite.DB
-	ipcServer       *ipc.IpcServer
-	connMgr         *network.ConnectionManager
-	detector        *versioning.ConflictDetector
-	queue           *SyncQueue
-	transferMgr     *transfer.FileTransferManager
-	localPeerID     string
-	mu              sync.RWMutex
-	workers         map[string]chan struct{} // repoID -> stop channel
-	concurrencySem  chan struct{}            // semaphore for concurrent P2P transfers
-	stopChan        chan struct{}
-	wg              sync.WaitGroup
+	db               *sqlite.DB
+	ipcServer        *ipc.IpcServer
+	connMgr          *network.ConnectionManager
+	detector         *versioning.ConflictDetector
+	queue            *SyncQueue
+	transferMgr      *transfer.FileTransferManager
+	localPeerID      string
+	mu               sync.RWMutex
+	workers          map[string]chan struct{} // repoID -> stop channel
+	concurrencySem   chan struct{}            // semaphore for concurrent P2P transfers
+	stopChan         chan struct{}
+	wg               sync.WaitGroup
+	pendingDownloads map[string]pendingDownload // path:hash -> pendingDetails
 }
 
 // NewSyncCoordinator creates a new SyncCoordinator.
@@ -40,16 +47,17 @@ func NewSyncCoordinator(
 	localPeerID string,
 ) *SyncCoordinator {
 	return &SyncCoordinator{
-		db:             db,
-		ipcServer:      ipcServer,
-		connMgr:        connMgr,
-		detector:       versioning.NewConflictDetector(),
-		queue:          NewSyncQueue(),
-		transferMgr:    transfer.NewFileTransferManager(ipcServer),
-		localPeerID:    localPeerID,
-		workers:        make(map[string]chan struct{}),
-		concurrencySem: make(chan struct{}, 4), // Max 4 concurrent uploads/downloads
-		stopChan:       make(chan struct{}),
+		db:               db,
+		ipcServer:        ipcServer,
+		connMgr:          connMgr,
+		detector:         versioning.NewConflictDetector(),
+		queue:            NewSyncQueue(),
+		transferMgr:      transfer.NewFileTransferManager(ipcServer),
+		localPeerID:      localPeerID,
+		workers:          make(map[string]chan struct{}),
+		concurrencySem:   make(chan struct{}, 4), // Max 4 concurrent uploads/downloads
+		stopChan:         make(chan struct{}),
+		pendingDownloads: make(map[string]pendingDownload),
 	}
 }
 
@@ -363,11 +371,6 @@ func (sc *SyncCoordinator) logAndNotifyConflict(repoID, path string, local, remo
 }
 
 func (sc *SyncCoordinator) sendMetadataUpdateToPeer(peerID, repoID, path string, version uint64, hash string, modifiedTime int64, isDeleted bool) {
-	conn := sc.connMgr.GetConnection(peerID)
-	if conn == nil {
-		return
-	}
-
 	p2pMsg := &ipc.Message{
 		Version:   "1.0",
 		Type:      "file_metadata_update",
@@ -385,7 +388,7 @@ func (sc *SyncCoordinator) sendMetadataUpdateToPeer(peerID, repoID, path string,
 	}
 	p2pMsg.Payload, _ = json.Marshal(updatePayload)
 
-	_ = ipc.WriteMessage(conn, p2pMsg)
+	_ = sc.connMgr.SendToPeer(peerID, p2pMsg)
 }
 
 // queueProcessorLoop continuously pops tasks from the SyncQueue and processes them.
@@ -422,9 +425,7 @@ func (sc *SyncCoordinator) executeSyncTask(task *SyncTask) {
 	log.Printf("[SyncCoordinator] Executing sync task: %s %s (%d bytes)\n", task.Type, task.FilePath, task.Size)
 
 	if task.Type == Download {
-		transferID := fmt.Sprintf("dl_%d_%s", time.Now().UnixNano(), task.RepoID)
-		peerConn := sc.connMgr.GetConnection(task.PeerID)
-		if peerConn == nil {
+		if !sc.connMgr.IsConnected(task.PeerID) {
 			log.Printf("[SyncCoordinator] Transfer failed: peer %s disconnected\n", task.PeerID)
 			return
 		}
@@ -442,12 +443,180 @@ func (sc *SyncCoordinator) executeSyncTask(task *SyncTask) {
 		}
 		reqMsg.Payload, _ = json.Marshal(reqPayload)
 
-		// Wait for response via network reader callback.
-		// For simplicity in the coordinator flow, the FileTransfer socket handover
-		// accepts incoming connections from C++ and handles streaming.
-		// Here, we log the start of the transfer session in our local manager.
-		// A full end-to-end integration handles incoming network connections.
+		// Register pending download details
+		sc.mu.Lock()
+		sc.pendingDownloads[task.FilePath+":"+task.Hash] = pendingDownload{
+			size:   task.Size,
+			repoID: task.RepoID,
+		}
+		sc.mu.Unlock()
+
+		// Actually send file_request to remote peer!
+		if err := sc.connMgr.SendToPeer(task.PeerID, reqMsg); err != nil {
+			sc.mu.Lock()
+			delete(sc.pendingDownloads, task.FilePath+":"+task.Hash)
+			sc.mu.Unlock()
+			log.Printf("[SyncCoordinator] Failed to send file_request to peer %s: %v\n", task.PeerID, err)
+			return
+		}
 		
-		log.Printf("[SyncCoordinator] Download request (%s) sent to peer %s for: %s\n", transferID, task.PeerID, task.FilePath)
+		log.Printf("[SyncCoordinator] Download request sent to peer %s for: %s\n", task.PeerID, task.FilePath)
 	}
+}
+
+// HandleP2PMessage handles messages arriving from remote Go peers over the network.
+func (sc *SyncCoordinator) HandleP2PMessage(peerID string, msg *ipc.Message) error {
+	switch msg.Type {
+	case "file_metadata_update":
+		var payload map[string]interface{}
+		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+			return fmt.Errorf("unmarshal metadata update: %w", err)
+		}
+		repoID, _ := payload["repo_id"].(string)
+		sc.HandlePeerMetadataUpdate(peerID, repoID, payload)
+		return nil
+
+	case "file_request":
+		var payload protocol.FileRequestPayload
+		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+			return fmt.Errorf("unmarshal file request: %w", err)
+		}
+
+		// Look up the file in SQLite across repos to get repositoryID and size
+		meta, err := sc.db.Metadata().GetByPathAndHash(payload.Path, payload.Hash)
+		if err != nil || meta == nil {
+			log.Printf("[SyncCoordinator] File request rejected: %s not found locally\n", payload.Path)
+			resp := &ipc.Message{
+				Version:   "1.0",
+				Type:      "file_response",
+				Source:    "go",
+				Timestamp: time.Now().UnixNano() / int64(time.Millisecond),
+			}
+			respPayload, _ := json.Marshal(protocol.FileResponsePayload{
+				Path:  payload.Path,
+				Hash:  payload.Hash,
+				Error: "file not found locally",
+			})
+			resp.Payload = respPayload
+			_ = sc.connMgr.SendToPeer(peerID, resp)
+			return nil
+		}
+
+		// File is found locally. Start upload session.
+		transferID := fmt.Sprintf("up_%d_%s", time.Now().UnixNano(), meta.RepositoryID)
+		transferPort, err := sc.transferMgr.StartUpload(transferID, meta.Filepath, peerID, meta.Hash, meta.Size)
+		if err != nil {
+			log.Printf("[SyncCoordinator] StartUpload failed for %s: %v\n", payload.Path, err)
+			resp := &ipc.Message{
+				Version:   "1.0",
+				Type:      "file_response",
+				Source:    "go",
+				Timestamp: time.Now().UnixNano() / int64(time.Millisecond),
+			}
+			respPayload, _ := json.Marshal(protocol.FileResponsePayload{
+				Path:  payload.Path,
+				Hash:  payload.Hash,
+				Error: err.Error(),
+			})
+			resp.Payload = respPayload
+			_ = sc.connMgr.SendToPeer(peerID, resp)
+			return nil
+		}
+
+		// Send file_response to remote peer with dynamic transfer port
+		resp := &ipc.Message{
+			Version:   "1.0",
+			Type:      "file_response",
+			Source:    "go",
+			Timestamp: time.Now().UnixNano() / int64(time.Millisecond),
+		}
+		respPayload, _ := json.Marshal(protocol.FileResponsePayload{
+			Path:         payload.Path,
+			Hash:         payload.Hash,
+			TransferPort: transferPort,
+		})
+		resp.Payload = respPayload
+		_ = sc.connMgr.SendToPeer(peerID, resp)
+		return nil
+
+	case "file_response":
+		var payload protocol.FileResponsePayload
+		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+			return fmt.Errorf("unmarshal file response: %w", err)
+		}
+
+		if payload.Error != "" {
+			log.Printf("[SyncCoordinator] Remote file request failed: %s\n", payload.Error)
+			return nil
+		}
+
+		// Find the peer's host IP from their active connection
+		peerConn := sc.connMgr.GetConnection(peerID)
+		if peerConn == nil {
+			log.Printf("[SyncCoordinator] Peer %s disconnected before transfer\n", peerID)
+			return nil
+		}
+		remoteAddr := peerConn.RemoteAddr().String()
+		host, _, err := net.SplitHostPort(remoteAddr)
+		if err != nil {
+			host = remoteAddr // Fallback
+		}
+
+		// Look up expected size and repo ID from pending downloads map
+		sc.mu.Lock()
+		pDetails, exists := sc.pendingDownloads[payload.Path+":"+payload.Hash]
+		if exists {
+			delete(sc.pendingDownloads, payload.Path+":"+payload.Hash)
+		}
+		sc.mu.Unlock()
+
+		if !exists {
+			log.Printf("[SyncCoordinator] Pending download details not found for response: %s\n", payload.Path)
+			return nil
+		}
+
+		// Start download session: connect to the peer's dynamic transferPort
+		transferID := fmt.Sprintf("dl_%d_%s", time.Now().UnixNano(), pDetails.repoID)
+		err = sc.transferMgr.StartDownload(transferID, payload.Path, peerID, payload.Hash, pDetails.size, host, payload.TransferPort)
+		if err != nil {
+			log.Printf("[SyncCoordinator] StartDownload failed: %v\n", err)
+		}
+		return nil
+	}
+	return nil
+}
+
+// HandleIPCMessage handles incoming IPC messages from local C++ watcher/daemon.
+func (sc *SyncCoordinator) HandleIPCMessage(msg *ipc.Message) error {
+	switch msg.Type {
+	case "add_repository":
+		var payload struct {
+			RepoID string `json:"repo_id"`
+			Path   string `json:"path"`
+		}
+		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+			return err
+		}
+		return sc.AddRepository(payload.RepoID, payload.Path)
+
+	case "remove_repository":
+		var payload struct {
+			RepoID string `json:"repo_id"`
+		}
+		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+			return err
+		}
+		return sc.RemoveRepository(payload.RepoID)
+
+	case "file_changed":
+		var payload struct {
+			RepoID string `json:"repo_id"`
+			protocol.FileChangedPayload
+		}
+		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+			return err
+		}
+		return sc.HandleLocalFileChanged(payload.RepoID, &payload.FileChangedPayload)
+	}
+	return nil
 }

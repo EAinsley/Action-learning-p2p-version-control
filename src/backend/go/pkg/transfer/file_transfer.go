@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"strconv"
 	"sync"
 	"time"
 
@@ -14,16 +15,17 @@ import (
 
 // TransferSession represents an active or preparing file transfer session.
 type TransferSession struct {
-	mu         sync.Mutex
-	TransferID string
-	FilePath   string
-	PeerID     string
-	Type       string // "download" or "upload"
-	LocalPort  int
-	LocalList  net.Listener
-	NetConn    net.Conn // P2P network connection
-	Status     string   // "preparing", "streaming", "completed", "failed"
-	Error      error
+	mu           sync.Mutex
+	TransferID   string
+	FilePath     string
+	PeerID       string
+	Type         string // "download" or "upload"
+	LocalPort    int
+	LocalList    net.Listener
+	NetConn      net.Conn // P2P network connection
+	Status       string   // "preparing", "streaming", "completed", "failed"
+	ExpectedSize int64
+	Error        error
 }
 
 // FileTransferManager manages local socket handovers and streams raw file data.
@@ -45,7 +47,7 @@ func NewFileTransferManager(ipcServer *ipc.IpcServer) *FileTransferManager {
 // sets up a local listener for the C++ daemon to connect to, and proxies the bytes.
 func (ft *FileTransferManager) StartDownload(transferID, filePath, peerID, expectedHash string, expectedSize int64, peerAddr string, peerPort int) error {
 	// 1. Connect to remote peer's TCP transfer socket
-	addr := fmt.Sprintf("%s:%d", peerAddr, peerPort)
+	addr := net.JoinHostPort(peerAddr, strconv.Itoa(peerPort))
 	netConn, err := net.DialTimeout("tcp", addr, 10*time.Second)
 	if err != nil {
 		return fmt.Errorf("failed to connect to remote peer transfer port %s: %w", addr, err)
@@ -60,14 +62,15 @@ func (ft *FileTransferManager) StartDownload(transferID, filePath, peerID, expec
 	localPort := localListener.Addr().(*net.TCPAddr).Port
 
 	session := &TransferSession{
-		TransferID: transferID,
-		FilePath:   filePath,
-		PeerID:     peerID,
-		Type:       "download",
-		LocalPort:  localPort,
-		LocalList:  localListener,
-		NetConn:    netConn,
-		Status:     "preparing",
+		TransferID:   transferID,
+		FilePath:     filePath,
+		PeerID:       peerID,
+		Type:         "download",
+		LocalPort:    localPort,
+		LocalList:    localListener,
+		NetConn:      netConn,
+		Status:       "preparing",
+		ExpectedSize: expectedSize,
 	}
 
 	ft.mu.Lock()
@@ -119,13 +122,14 @@ func (ft *FileTransferManager) StartUpload(transferID, filePath, peerID, expecte
 	localPort := localListener.Addr().(*net.TCPAddr).Port
 
 	session := &TransferSession{
-		TransferID: transferID,
-		FilePath:   filePath,
-		PeerID:     peerID,
-		Type:       "upload",
-		LocalPort:  localPort,
-		LocalList:  localListener,
-		Status:     "preparing",
+		TransferID:   transferID,
+		FilePath:     filePath,
+		PeerID:       peerID,
+		Type:         "upload",
+		LocalPort:    localPort,
+		LocalList:    localListener,
+		Status:       "preparing",
+		ExpectedSize: expectedSize,
 	}
 
 	ft.mu.Lock()
@@ -177,11 +181,22 @@ func (ft *FileTransferManager) streamDownload(session *TransferSession) {
 	session.Status = "streaming"
 	session.mu.Unlock()
 
+	// Set deadlines to avoid socket leakage on network hangs
+	_ = session.NetConn.SetReadDeadline(time.Now().Add(30 * time.Second))
+	_ = localConn.SetWriteDeadline(time.Now().Add(30 * time.Second))
+
 	// Copy from network peer connection to local C++ connection
-	_, err = io.Copy(localConn, session.NetConn)
+	limitReader := io.LimitReader(session.NetConn, session.ExpectedSize)
+	copied, err := io.Copy(localConn, limitReader)
 	if err != nil {
 		log.Printf("[FileTransferManager] Download streaming error: %v\n", err)
 		ft.finishSession(session, err)
+		return
+	}
+
+	if copied != session.ExpectedSize {
+		log.Printf("[FileTransferManager] Download size mismatch: got %d, expected %d\n", copied, session.ExpectedSize)
+		ft.finishSession(session, fmt.Errorf("size mismatch: got %d, expected %d", copied, session.ExpectedSize))
 		return
 	}
 
@@ -219,11 +234,22 @@ func (ft *FileTransferManager) streamUpload(session *TransferSession, netListene
 	session.Status = "streaming"
 	session.mu.Unlock()
 
+	// Set deadlines to avoid socket leakage on network hangs
+	_ = localConn.SetReadDeadline(time.Now().Add(30 * time.Second))
+	_ = session.NetConn.SetWriteDeadline(time.Now().Add(30 * time.Second))
+
 	// Copy from local C++ connection to network peer connection
-	_, err = io.Copy(session.NetConn, localConn)
+	limitReader := io.LimitReader(localConn, session.ExpectedSize)
+	copied, err := io.Copy(session.NetConn, limitReader)
 	if err != nil {
 		log.Printf("[FileTransferManager] Upload streaming error: %v\n", err)
 		ft.finishSession(session, err)
+		return
+	}
+
+	if copied != session.ExpectedSize {
+		log.Printf("[FileTransferManager] Upload size mismatch: got %d, expected %d\n", copied, session.ExpectedSize)
+		ft.finishSession(session, fmt.Errorf("size mismatch: got %d, expected %d", copied, session.ExpectedSize))
 		return
 	}
 
@@ -276,12 +302,36 @@ func (ft *FileTransferManager) GetSession(transferID string) (TransferSession, b
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return TransferSession{
-		TransferID: s.TransferID,
-		FilePath:   s.FilePath,
-		PeerID:     s.PeerID,
-		Type:       s.Type,
-		LocalPort:  s.LocalPort,
-		Status:     s.Status,
-		Error:      s.Error,
+		TransferID:   s.TransferID,
+		FilePath:     s.FilePath,
+		PeerID:       s.PeerID,
+		Type:         s.Type,
+		LocalPort:    s.LocalPort,
+		Status:       s.Status,
+		ExpectedSize: s.ExpectedSize,
+		Error:        s.Error,
 	}, true
+}
+
+// GetSessions returns a copy of all active/completed transfer sessions.
+func (ft *FileTransferManager) GetSessions() []TransferSession {
+	ft.mu.RLock()
+	defer ft.mu.RUnlock()
+
+	list := make([]TransferSession, 0, len(ft.sessions))
+	for _, s := range ft.sessions {
+		s.mu.Lock()
+		list = append(list, TransferSession{
+			TransferID:   s.TransferID,
+			FilePath:     s.FilePath,
+			PeerID:       s.PeerID,
+			Type:         s.Type,
+			LocalPort:    s.LocalPort,
+			Status:       s.Status,
+			ExpectedSize: s.ExpectedSize,
+			Error:        s.Error,
+		})
+		s.mu.Unlock()
+	}
+	return list
 }
