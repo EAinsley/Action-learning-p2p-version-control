@@ -79,8 +79,7 @@ func (s *IpcServer) acceptConnections() {
 	for {
 		conn, err := s.listener.Accept()
 		if err != nil {
-			fmt.Printf("Error accepting connection: %v\n", err)
-			continue
+			return
 		}
 
 		s.clientMu.Lock()
