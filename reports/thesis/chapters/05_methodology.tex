@@ -1,74 +1,125 @@
 \chapter{Methodology}
 
-This chapter discusses the methodology used in the project, the stages of implementation, and the research design. It covers the participants, the tools used, the development procedure, and how results will be evaluated. This is where our action plan fits.
+\section*{Summary}
+This chapter describes the methodology used in the project, the stages by which it was implemented, and the research design. It details the participants, the tools and instruments used, the development procedure, and how results will be evaluated. The action plan for Action Learning Week is included at the end.
 
 \section{Methodology Anticipated}
 \label{sec:method-anticipated}
 
-\subsection{Team Structure}
+\subsection{Team Structure and Roles}
 
-The team has four members, split by area:
+The team has four members. Responsibilities were divided by technical domain, based on each member's existing skills and what they wanted to learn:
 
 \begin{itemize}
-    \item \textbf{Arihant Jain}: Backend (Go). Peer discovery, synchronization coordination, IPC server, TCP networking.
-    \item \textbf{Su Huizhe}: Backend (C++). File watching, SHA-256 hashing, file versioning, disk I/O.
-    \item \textbf{Nizar Soufiya}: Frontend (Java). User interface and interaction design.
-    \item \textbf{Shengkang Duan}: Frontend (Java) and CI/CD. Build automation, testing pipeline, GitHub Actions.
+    \item \textbf{Arihant Jain} (Backend, Go): peer discovery, synchronization coordination, IPC server, TCP networking. Arihant had prior experience with Go from a personal project and took the lead on the networking daemon.
+    \item \textbf{Su Huizhe} (Backend, C++): file watching, SHA-256 hashing, file versioning, disk I/O. Huizhe had worked with C++ in systems programming courses and was comfortable with memory-mapped I/O and kernel APIs.
+    \item \textbf{Nizar Soufiya} (Frontend, Java): user interface design and implementation. Nizar had experience with Java Swing from a previous course project.
+    \item \textbf{Shengkang Duan} (Frontend and CI/CD, Java): build automation, test pipeline, GitHub Actions configuration. Shengkang set up the continuous integration pipeline early in the project, which gave the team fast feedback on every commit.
 \end{itemize}
+
+The split between backend and frontend roughly corresponds to the Go/C++ daemons and the Java GUI described in Chapter~4. The two groups worked in parallel for most of the project, meeting weekly to align on interface contracts and integration issues.
 
 \subsection{Development Process}
 
-We used an iterative, prototype-based approach rather than planning everything upfront:
+Rather than writing a detailed specification and implementing it sequentially, the team followed an iterative development process structured around the course milestones from April to July 2026. The project moved through four distinct phases:
 
 \begin{enumerate}
-    \item \textbf{Phase 1: Research and Design.} Literature review, architecture design, and protocol specification. This produced the literature review, architecture diagrams, and the interface contracts between Go and C++.
-
-    \item \textbf{Phase 2: Core Prototyping.} Independent development of the Go networking daemon and C++ storage daemon. Each component was built and tested against mock interfaces before integration.
-
-    \item \textbf{Phase 3: Integration.} Connecting Go and C++ through IPC, testing end-to-end synchronization on a local network, and connecting the Java frontend.
-
-    \item \textbf{Phase 4: Evaluation.} Testing the system against the hypotheses from the Introduction: measuring synchronization latency ($H_1$) and evaluating consistency and recovery ($H_2$).
+    \item \textbf{Phase 1: Initiation and Research (April 19 to May 15, 2026).} Began with the Project Proposal submission on April 19, followed by the Literature Review and Presentation Workshop on April 28. During this phase, we divided research areas, submitted our initial bibliography on May 8, and outlined the literature review on May 15. The focus was on studying distributed systems algorithms (such as logical clocks and CAP theorem trade-offs) and testing local network discovery protocols (mDNS/DNS-SD).
+    
+    \item \textbf{Phase 2: Core Prototyping (May 6 to May 29, 2026).} Initiated at Hackathon 1 (Prototype Sprint) on May 6, where we wrote the first standalone prototypes of the Go networking module and the C++ file-watching daemon. The theoretical foundation was finalized and submitted as the Completed Literature Review on May 29.
+    
+    \item \textbf{Phase 3: Integration and MVP Sprints (June 12 to June 22, 2026).} Following the Public Speaking Workshop on June 12, we completed Hackathon 2 (MVP Sprint) on June 17, which focused on end-to-end integration over Unix domain sockets. This phase culminated in the submission of this thesis and the accompanying Gen AI documentation on June 22.
+    
+    \item \textbf{Phase 4: Live Evaluation (July 6 to July 10, 2026).} Scheduled for Action Learning Week, this final phase consists of live WLAN latency and consistency testing, concluding on July 10 with the submission of the final MVP, 360 peer evaluations, and poster presentation.
 \end{enumerate}
-
-\subsection{Tools}
-
-\begin{itemize}
-    \item \textbf{Languages:} Go 1.21+, C++17, Java 17
-    \item \textbf{Build:} Go modules, CMake (C++), Gradle (Java)
-    \item \textbf{Version control:} Git with GitHub
-    \item \textbf{CI/CD:} GitHub Actions
-    \item \textbf{Testing:} Go testing package, Google Test (C++), JUnit (Java)
-    \item \textbf{Test environment:} Multiple laptops on the same WLAN
-    \item \textbf{Documentation:} \LaTeX
-\end{itemize}
-
-\subsection{Research Design}
-
-We formulated two hypotheses and will test them through controlled experiments:
-
-\begin{itemize}
-    \item \textbf{$H_1$ (Latency):} Measure sync latency across 3 to 5 peers on a standard WLAN. Success means sub-second average latency for files under 10\,MB.
-
-    \item \textbf{$H_2$ (Consistency):} Simulate concurrent edits and network disconnections. Success means: (a) no data loss from conflict resolution, (b) all peers reach the same file state within 30 seconds of reconnection, and (c) overwritten versions can be recovered from the backup directory.
-\end{itemize}
-
-\subsection{Action Plan}
 
 \begin{table}[htbp]
 \centering
-\caption{Action Plan Timeline}
+\caption{Action Learning Project Milestones}
+\label{tab:milestones}
+\begin{tabular}{p{4.5cm} p{8.5cm}}
+\toprule
+\textbf{Milestone / Event} & \textbf{Date / Deadline} \\
+\midrule
+Project Proposal Submission & April 19, 2026 \\
+\midrule
+Literature Review Workshop & April 28, 2026 (In-person) \\
+\midrule
+Hackathon 1 (Prototype Sprint) & May 6, 2026 (In-person) \\
+\midrule
+Bibliography Submission & May 8, 2026 \\
+\midrule
+Literature Review Outline & May 15, 2026 \\
+\midrule
+Completed Literature Review & May 29, 2026 \\
+\midrule
+Public Speaking Workshop & June 12, 2026 \\
+\midrule
+Hackathon 2 (MVP Sprint) & June 17, 2026 (In-person) \\
+\midrule
+Thesis \& Gen AI Submission & June 22, 2026 \\
+\midrule
+Action Learning Week & July 6 to 10, 2026 (In-person) \\
+\midrule
+Final MVP, Poster \& 360 Eval & July 10, 2026 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Tools and Instruments}
+
+\begin{table}[htbp]
+\centering
+\caption{Development Tools}
+\label{tab:tools}
+\begin{tabular}{p{4cm} p{9cm}}
+\toprule
+\textbf{Category} & \textbf{Tool} \\
+\midrule
+Languages & Go 1.21+, C++17, Java 17 \\
+\midrule
+Build systems & Go modules, CMake (C++), Gradle (Java) \\
+\midrule
+Version control & Git with GitHub for hosting and code review \\
+\midrule
+CI/CD & GitHub Actions (build, lint, test on every push) \\
+\midrule
+Testing frameworks & Go \texttt{testing} package, Google Test (C++), JUnit 5 (Java) \\
+\midrule
+Test environment & 3 to 5 laptops on the same WLAN subnet \\
+\midrule
+Documentation & \LaTeX\ (thesis and literature review) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Research Design}
+
+The project tests two hypotheses through controlled experiments:
+
+\textbf{Hypothesis 1 (Latency):} Measure the time from a file being saved on one peer to it appearing on another, across 3 to 5 peers connected to the same WLAN. Success is defined as sub-second average latency for files up to 10\,MB. The test procedure involves saving files of different sizes (1\,KB, 100\,KB, 1\,MB, 10\,MB) and recording timestamps at both ends.
+
+\textbf{Hypothesis 2 (Consistency):} Simulate concurrent edits by having two peers modify the same file while disconnected, then reconnecting them. Success is defined by three criteria: (a) no file is permanently lost due to conflict resolution, (b) all peers converge to the same version within 30 seconds of reconnection, and (c) the overwritten version is recoverable from the \texttt{.versions/} backup directory.
+
+\subsection{Action Plan}
+
+Table~\ref{tab:action-plan} maps the work to the Action Learning Week timeline.
+
+\begin{table}[htbp]
+\centering
+\caption{Action Plan for Action Learning Week}
 \label{tab:action-plan}
 \begin{tabular}{p{3cm} p{10cm}}
 \toprule
-\textbf{Period} & \textbf{Work} \\
+\textbf{Period} & \textbf{Planned Work} \\
 \midrule
-Pre-ALW & Literature review, architecture design, component prototypes \\
+Pre-ALW & Literature review complete, architecture finalised, Go and C++ prototypes built and tested independently \\
 \midrule
-ALW Day 1--2 & IPC integration between Go and C++ daemons \\
+ALW Days 1 and 2 & IPC integration between Go and C++ daemons; first end-to-end sync test between two laptops \\
 \midrule
-ALW Day 3--4 & End-to-end sync testing, frontend integration \\
+ALW Days 3 and 4 & Multi-peer testing (3+ laptops); Java frontend integration; conflict simulation tests \\
 \midrule
-ALW Day 5 & Hypothesis testing, writing up results \\
+ALW Day 5 & Hypothesis evaluation (latency testing, consistency validation); documentation of results \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -76,4 +127,4 @@ ALW Day 5 & Hypothesis testing, writing up results \\
 \section{Methodology Updated}
 \label{sec:method-updated}
 
-\textit{This section will be completed at the end of Action Learning Week. It will document the actual process followed, including any changes from the plan, problems encountered, and adjustments made.}
+\textit{This section will be completed at the end of Action Learning Week. It will describe what actually happened: which parts of the plan worked, what had to change, what problems came up, and how the team adapted.}

@@ -2,46 +2,52 @@
 
 \section{Motivations}
 
-University students working in temporary groups need to share files. In practice, most teams send files through group chats, email, or USB drives. This works for a while, but it leads to duplicated files, conflicting versions, and lost work. When two people edit the same document and send it back through the chat, one version gets lost.
+The idea for this project came directly from discussions within our team. Arihant wanted to work on distributed systems, but the specific project proposal and application concept were developed by Su and Nizar based on real problems they observed. 
 
-Cloud services like Google Drive solve part of this. But they depend on external servers, require account setup, and impose storage limits. Version control systems like Git track changes well but are built for source code and require technical knowledge that not all team members have. Peer-to-peer tools like Syncthing synchronize files without a server but lack version history. If someone saves a broken file, it overwrites everyone else's copy with no undo.
+Specifically, Nizar observed this difficulty during EPITA's \emph{Challenge Week}. In a high-pressure team setting, group members who were unfamiliar with Git spent a lot of time troubleshooting setup issues, broken repositories, and merge conflicts. These technical hurdles regularly delayed collaboration, proving that for non-programmers or short-term work, Git is too complex to be practical.
 
-We wanted a tool that fills the space between these options: automatic synchronization on a local network, with version backups built in, and no setup required.
+At the same time, we saw the limits of simpler sharing methods. During a database course last semester, three of our team members ended up with four different versions of an ER diagram file. Reconciling those changes manually across email, WhatsApp, and USB drives was error-prone, and the final submission used an outdated version. 
+
+Existing tools address parts of this problem. Google Drive \cite{googledrive} and Dropbox \cite{dropbox} synchronize files through cloud servers but require internet access, accounts, and have storage quotas. Git \cite{gitbook} tracks changes perfectly but requires advanced training in branches and staging. Syncthing \cite{syncthing} handles peer-to-peer transfers serverlessly, but it treats file version history as an afterthought and lacks a simple interface to undo accidental overwrites. 
+
+Our goal was to build a tool that does all three: synchronize files automatically on a local network, protect files with automatic version backups before overwrites, and run with zero configuration or technical overhead.
 
 \section{Context of the Project}
 
-This thesis was developed as part of the Action Learning programme at EPITA. Our team has four members: two working on the backend (Go and C++), and two on the frontend and CI/CD (Java and GitHub Actions).
+This project was developed as part of the Action Learning programme at EPITA, a programme that asks students to identify a real problem and build a solution in a team of four. Our team has two backend developers working in Go and C++, and two frontend and CI/CD developers working in Java with GitHub Actions.
 
-The project grew from our own experience with file sharing problems during previous coursework. We wanted a system where you put files into a folder and they show up on your teammates' machines. Edit a file and the change spreads automatically. Accidentally overwrite something and a backup is there.
+The idea came from our own frustration. Rather than building something theoretical, we decided to solve the file-sharing problem we kept running into. The system we set out to build should feel invisible: put files into a folder on your laptop, and they show up on your teammates' laptops. Change a file, and everyone gets the update. If an update accidentally overwrites something, a backup of the old version is waiting in a local folder.
+
+The Action Learning context shaped how we worked. With a fixed timeline and a small team, every design decision had to balance ambition against what could actually be built and tested in the available time.
 
 \section{Objectives}
 
-The project has three main objectives:
+The project has three objectives:
 
 \begin{enumerate}
-    \item Design a serverless peer-to-peer synchronization system that discovers peers automatically on a local network using mDNS/DNS-SD, synchronizes directories through direct TCP connections, and requires no manual configuration.
+    \item \textbf{Build a serverless synchronization system.} Peers discover each other automatically on a local network using mDNS/DNS-SD (the same protocols that let printers appear on your Wi-Fi without configuration). Files synchronize over direct TCP connections. No server, no accounts, no internet required.
 
-    \item Provide version safety by creating local backups automatically before any synchronized overwrite, using Lamport clock timestamps and a Last-Write-Wins conflict resolution policy.
+    \item \textbf{Protect against accidental data loss.} Before any synchronized overwrite, the system saves the existing file into a local backup directory. Conflict resolution uses a Last-Write-Wins rule based on Lamport clock timestamps: predictable, automatic, and reversible.
 
-    \item Validate the design through two testable hypotheses:
+    \item \textbf{Test two specific claims:}
     \begin{itemize}
-        \item[$H_1$:] Sub-second average synchronization latency on a standard WLAN without cloud infrastructure.
-        \item[$H_2$:] Sufficient consistency and rollback recovery for 3 to 5 peers using single logical timestamps with LWW, without the overhead of vector clocks or CRDTs.
+        \item[$H_1$:] Average synchronization latency under one second on a standard WLAN for files up to 10\,MB, with no cloud infrastructure.
+        \item[$H_2$:] For 3 to 5 peers, Lamport clocks with LWW are sufficient to maintain consistency and support rollback, without needing vector clocks or CRDTs.
     \end{itemize}
 \end{enumerate}
 
 \section{Overview of the Thesis}
 
-Chapter~2 reviews the literature on distributed synchronization and peer-to-peer systems. It analyses the trade-offs between existing approaches and identifies the gap that this project addresses.
+Chapter~2 reviews the academic literature on distributed synchronization and collaborative file management. It discusses the trade-offs between different approaches and identifies the specific gap our project addresses.
 
-Chapter~3 presents the state of the art: the specific research and technical decisions that shaped the architecture.
+Chapter~3 covers the state of the art: the research findings and technical decisions that determined our architecture, from protocol selection to conflict resolution strategy.
 
-Chapter~4 describes the system architecture, including the Go/C++ component split and the communication protocols used.
+Chapter~4 describes the system architecture, how the Go and C++ components divide responsibilities, and how data flows through the system.
 
-Chapter~5 covers the methodology, including the action plan, development process, and research design.
+Chapter~5 explains the methodology, including our team structure, development process, tools, and the action plan for Action Learning Week.
 
-Chapter~6 presents the expected development results and, after Action Learning Week, the actual outcomes.
+Chapter~6 lists the expected development outcomes. After Action Learning Week, it will also cover what actually happened.
 
-Chapter~7 contains the conclusions and outlines future work.
+Chapter~7 presents the conclusions, summarises the contributions, and suggests directions for future work.
 
-The appendices include detailed comparison tables and supplementary material.
+The appendices contain detailed comparison tables that support the analysis in Chapter~2.

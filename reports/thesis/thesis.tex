@@ -21,6 +21,8 @@
 \usepackage{titlesec}
 \usepackage[toc,page]{appendix}
 \usepackage{mathptmx}                 % Times New Roman font
+\usepackage{tikz}                     % For architecture diagram
+\usetikzlibrary{arrows.meta, positioning, shapes.geometric, calc}
 
 % =============================================================================
 % DOCUMENT SETTINGS
@@ -28,10 +30,6 @@
 
 % Double spacing as required by template
 \doublespacing
-
-% Color definitions
-\definecolor{darkblue}{rgb}{0.0, 0.0, 0.5}
-\definecolor{lightgray}{rgb}{0.95, 0.95, 0.95}
 
 % Custom column types
 \newcolumntype{C}[1]{>{\centering\arraybackslash}p{#1}}
@@ -89,7 +87,7 @@
     \vspace{1cm}
 
     \textbf{Advisor}\\
-    \textit{[Put name here]}\\
+    Thomas Broussard\\
 
     \vfill
     \today
@@ -101,26 +99,24 @@
 \chapter*{Declaration of Own Work}
 \addcontentsline{toc}{chapter}{Declaration of Own Work}
 
-\textit{To be signed in the presence of your Advisor or EPITA staff delegate.}
-
-\vspace{1cm}
-
 This work has been composed solely by us.
 
-This work has not been accepted in any previous application for a degree or diploma.
+This work has not been accepted in any previous application for a degree or diploma, by Arihant Jain, Su Huizhe, Nizar Soufiya, and Shengkang Duan, or anyone else.
 
 The work of which this is a record has been wholly done by us.
 
 All extracts, including those created by generative AI, have been distinguished by quotation marks and the sources of our information have been specifically acknowledged and documented with in-text citations and in the bibliography.
 
-\vspace{2cm}
+All prompts with responses for any use Generative AI must be included in a separate MS Word document, clearly referencing its appearance in the bibliography and allowing the reader to easily associate the extract you used with the prompt. Here is how APA cites Generative AI: \url{https://apastyle.apa.org/blog/how-to-cite-chatgpt}
+
+\vspace{0.8cm}
 
 \begin{tabular}{p{6cm} p{6cm}}
-Date: \underline{\hspace{4cm}} & \\[1.5cm]
-Name: \underline{\hspace{4cm}} & Signature: \underline{\hspace{4cm}} \\[1cm]
-Name: \underline{\hspace{4cm}} & Signature: \underline{\hspace{4cm}} \\[1cm]
-Name: \underline{\hspace{4cm}} & Signature: \underline{\hspace{4cm}} \\[1cm]
-Name: \underline{\hspace{4cm}} & Signature: \underline{\hspace{4cm}} \\
+Date: \underline{\hspace{4cm}} & \\[0.8cm]
+Name: \underline{\hspace{4cm}} & Signature: \underline{\hspace{4cm}} \\[0.6cm]
+Name: \underline{\hspace{4cm}} & Signature: \underline{\hspace{4cm}} \\[0.6cm]
+Name: \underline{\hspace{4cm}} & Signature: \underline{\hspace{4cm}} \\[0.6cm]
+Name: \underline{\hspace{4cm}} & Signature: \underline{\hspace{4cm}} \\[0.6cm]
 \end{tabular}
 
 % ---- Acknowledgements ----
@@ -128,14 +124,18 @@ Name: \underline{\hspace{4cm}} & Signature: \underline{\hspace{4cm}} \\
 \chapter*{Acknowledgements}
 \addcontentsline{toc}{chapter}{Acknowledgements}
 
-\textit{Write your acknowledgements here.}
+We would like to thank our advisor for their guidance throughout this project. We also thank the EPITA faculty and Action Learning programme coordinators for providing the framework and resources that made this project possible. Finally, we thank each other for the late debugging sessions and the willingness to learn new languages and tools on a tight timeline.
 
 % ---- Abstract / Executive Summary ----
 \newpage
 \chapter*{Abstract}
 \addcontentsline{toc}{chapter}{Abstract}
 
-\textit{The abstract goes here. It should be self-contained and clearly state the problem dealt with by the thesis. Give a brief description of the proposed solution. This section should be more about the problem than the solution. It is recommended to write this section at the same time as the conclusion.}
+Small collaborative teams, particularly university students working on temporary group projects, face a recurring problem: sharing and tracking project files without dedicated infrastructure. Cloud storage services require external servers and internet connectivity. Version control systems demand technical expertise and are designed for source code. Peer-to-peer file synchronization tools lack version history, meaning a single accidental overwrite can propagate to every connected device with no way to undo it.
+
+This thesis proposes a peer-to-peer directory synchronization system with built-in version safety. The system discovers peers automatically on a local network using mDNS/DNS-SD, synchronizes file changes over direct TCP connections, and creates local backups before every synchronized overwrite. Conflict resolution uses a Last-Write-Wins policy paired with Lamport clock timestamps, a combination that keeps the implementation simple while ensuring no data is permanently lost.
+
+The system is implemented as two cooperating daemons: a Go networking component handling peer discovery and synchronization coordination, and a C++ storage component handling file watching, content hashing, and disk I/O. A Java graphical frontend provides user visibility into synchronization status and version history.
 
 % ---- Table of Contents ----
 \newpage

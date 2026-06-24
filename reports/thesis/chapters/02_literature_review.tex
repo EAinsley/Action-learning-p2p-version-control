@@ -1,107 +1,103 @@
 \chapter{Literature Review}
 
-This chapter reviews the research that informed our project. It focuses on what we learned from the literature, how it changed our thinking, and where open questions remain. The emphasis is on analysis and lessons learned, not on describing what each tool does.
+This chapter covers the research that shaped our project. The goal is not to list tools or summarize papers, but to explain what the existing literature taught us and where it left questions that our project tries to answer.
 
-Our team split the research by topic. Arihant and Huizhe focused on distributed systems theory (consistency models, replication, synchronization algorithms). Nizar and Shengkang studied existing collaborative tools and local networking technologies. We met weekly to present findings and discuss how they applied to our project.
+The research was divided among the team. Arihant and Huizhe took on distributed systems theory: consistency models, replication strategies, and synchronization algorithms. They focused on the academic side, reading papers by Lamport, Shapiro, and Saito. Nizar and Shengkang surveyed existing tools and local networking technologies, testing products like Syncthing and comparing cloud platforms. Each week, we met to present what we found and argue about what mattered for our design. Some of the best design decisions came out of those arguments.
 
 \section{The Collaborative File Management Landscape}
 
-Collaborative file management tools fall into four broad categories. Each one does some things well and other things poorly.
+Collaborative file management tools can be grouped into four categories. None of them does everything well, and understanding where each one falls short is what pointed us toward our project.
 
-\textbf{Centralized platforms} like Google Drive \cite{googledrive}, Dropbox \cite{dropbox}, and Nextcloud are easy to use and synchronize files well. But they depend entirely on external servers. When the server is down or the internet is unavailable, collaboration stops. Their version history is shallow: enough to undo a recent mistake, but not enough to track how a project changed over weeks.
+\textbf{Centralized cloud platforms} (Google Drive \cite{googledrive}, Dropbox \cite{dropbox}, Nextcloud) are the tools most students reach for first. They synchronize files through a central server, handle multiple devices, and have friendly interfaces. The problems are structural, not cosmetic. Everything depends on the server. If the internet is down, or if the campus Wi-Fi drops, you cannot sync. If the provider changes their pricing or storage limits, you adjust or leave. Dropbox's own engineering team rebuilt their sync engine from scratch to handle the complexity of tracking file states across devices \cite{dropboxtech}, which illustrates how difficult reliable synchronization is even with centralised infrastructure. Version history exists, but it is time-limited (30 days on Google Drive, for example) and not designed for tracking the evolution of a project.
 
-\textbf{Version control systems} like Git \cite{gitbook} and SVN provide detailed revision histories, branching, and conflict resolution. But they were designed for source code. Their workflow (staging, committing, pushing, pulling, resolving merge conflicts) assumes technical knowledge that not every member of a student team has.
+\textbf{Version control systems} (Git \cite{gitbook}, SVN, Perforce) solve the history problem completely. Git stores every version of every file, supports branching, and has detailed merge conflict resolution. But Git was built for software developers. The staging-committing-pushing workflow is not intuitive for someone who just wants to share a presentation or a dataset. In our own team, two out of four members had never used Git before this project, which is exactly the audience we are designing for.
 
-\textbf{Peer-to-peer synchronization tools} like Syncthing \cite{syncthing} and Resilio Sync \cite{resilio} remove the server requirement and synchronize files in the background. They handle any file type. But their version management is basic. Syncthing has file versioning, but it is a snapshot-based add-on, not a core feature. If someone saves a broken file, it immediately replaces the file on all connected devices.
+\textbf{Peer-to-peer synchronization tools} (Syncthing \cite{syncthing}, Resilio Sync \cite{resilio}) take a different approach. They synchronize files directly between devices, no server needed. Syncthing in particular is open source, works on most platforms, and handles any file type. But when Nizar tested it for a week, he noticed a gap: if he accidentally saved a file with errors, it immediately replaced the file on all connected devices. Syncthing does have a versioning feature, but it is not on by default and the interface for recovering old versions is buried in the settings. Versioning is an afterthought, not part of the core design.
 
-\textbf{Local sharing technologies} like AirDrop and Nearby Share offer simple one-time file transfers. There is no ongoing synchronization, no history, and no shared workspace.
+\textbf{Local sharing} (AirDrop, Nearby Share) is the simplest category. Select a file, tap a device, done. But these are one-shot transfers. There is no persistent connection, no synchronization, and no history. They solve a different problem.
 
-The main takeaway from this survey is that no existing tool combines automatic peer-to-peer synchronization with built-in version safety. The full comparison is in Appendix~\ref{app:comparison-tables}.
+The pattern is clear: each category does well on some dimensions and poorly on others. No single tool provides automatic synchronization, version safety, and zero configuration at the same time. The detailed comparison tables in Appendix~\ref{app:comparison-tables} show this across five evaluation dimensions.
 
-\section{Critical Analysis of Synchronization Approaches}
+\section{Synchronization in Distributed Systems}
 
-The academic literature on distributed synchronization raises several problems that directly affected our design choices.
+Rather than providing a comprehensive survey of distributed systems literature, this section highlights the specific synchronization challenges and design trade-offs that guided our implementation.
 
-\subsection{The Ordering Problem}
+\subsection{Ordering Events Without a Shared Clock}
 
-In a distributed system, things happen on different machines at different times. Without a shared clock, deciding which event came first is not straightforward. Lamport \citeyear{lamport1978} solved this with logical clocks: each process keeps a counter, increments it on every event, and attaches it to messages. If event $A$ caused event $B$, then $A$'s counter is lower than $B$'s.
+The first problem any distributed system faces is ordering. When things happen on different machines, how do you decide what came first? Physical clocks are unreliable because machines drift.
 
-This is useful but incomplete. Lamport clocks give a partial ordering. They cannot tell you whether two events happened at the same time with no connection between them. Fidge \citeyear{fidge1988} proposed vector clocks to solve this: each node keeps a separate counter for every participant. Vector clocks detect concurrent events, but they grow with the number of peers and require all participants to be known in advance.
+Lamport \citeyear{lamport1978} proposed a simple solution: logical clocks. Each process keeps a counter and increments it on every event. When sending a message, the sender attaches its counter. The receiver updates its own counter to be at least as high. This creates a \emph{partial ordering}: if event $A$ causally led to event $B$, then $A$'s timestamp will always be lower.
 
-For our system (3 to 5 peers), we decided vector clocks add more complexity than value. A single Lamport counter per file, with a tiebreaker rule, is enough. This is a practical choice, not a perfect one. If we needed to scale beyond a handful of peers, we would need to revisit it.
+The word ``partial'' matters. Lamport clocks cannot tell you whether two events are concurrent, that is, whether they happened independently with no causal connection. Fidge \citeyear{fidge1988} and Mattern independently proposed vector clocks to detect concurrency. Each node keeps an array of counters, one per participant. Vector clocks can identify concurrent events, but the counter array grows with the number of peers. Earlier, Parker et al. \citeyear{parker1983} had introduced version vectors for detecting mutual inconsistency between replicas, the formal basis for recognising when two copies of the same data have diverged.
 
-\subsection{Consistency vs. Availability}
+For our system, this trade-off was the first real design decision. With 3 to 5 peers on a local network, vector clocks would mean carrying a small array of integers. The overhead is tiny. But vector clocks also require knowing all participants, and adding or removing a peer requires updating every node's vector. Since our system is designed for temporary groups where members join and leave, Lamport clocks are simpler to manage. The cost is that we cannot detect true concurrency. If two peers edit the same file at the exact same moment, one version will silently overwrite the other. The backup mechanism makes this acceptable, but it is a real limitation.
 
-The CAP theorem, proven by Gilbert and Lynch \citeyear{brewer2002}, says that a distributed system experiencing network problems must choose between consistency (all nodes see the same data) and availability (all nodes can read and write). You cannot have both during a partition.
+\subsection{The CAP Theorem and Why It Matters}
 
-For our use case, the choice is straightforward. Student laptops go to sleep, disconnect from Wi-Fi, and leave the building. Blocking edits until everyone is online would make the tool useless. So we chose availability: peers edit freely when offline, and differences are resolved when they reconnect.
+Gilbert and Lynch \citeyear{brewer2002} proved that a distributed system cannot simultaneously guarantee consistency, availability, and partition tolerance. During a network partition (which on a campus Wi-Fi happens every time a laptop lid closes), you must choose: either block operations until the partition heals (consistency), or allow operations to continue and reconcile later (availability).
 
-Vogels \citeyear{vogels2009} calls this ``eventually consistent'' and argues it is the right model when temporary staleness is acceptable. A teammate seeing a file that is a few seconds old is fine. Losing a file because the system blocked an edit during a disconnection is not.
+In our case, we have to prioritize availability. Student laptops disconnect constantly: Wi-Fi drops, people move between classrooms, or a battery dies. If the sync tool blocked edits whenever a teammate was offline, it would be unusable. We therefore accept eventual consistency, allowing each peer to edit files offline and sync changes once they reconnect.
 
-\subsection{Conflict Resolution: Trade-offs}
+Vogels \citeyear{vogels2009} argued that eventual consistency is the right model for applications where reading slightly stale data is harmless. A teammate seeing a file that is ten seconds out of date causes no damage. Losing a file because the system refused to save it during a disconnection does.
 
-When two peers change the same file at the same time, the system must decide what to do. The literature shows a range of approaches.
+\subsection{Resolving Conflicts}
 
-\textbf{Operational transformation} \cite{sun1998} tracks individual editing operations and transforms them to preserve intent. Google Docs uses this. But it requires character-level logging, which does not work for binary files like images.
+When two peers edit the same file while disconnected, the system must decide what happens when they reconnect. The literature offers several approaches, each with trade-offs.
 
-\textbf{CRDTs} \cite{shapiro2011} define data structures whose merge operations always converge, regardless of the order updates are applied. Shapiro et al. proved this mathematically. It is a strong result, but implementing CRDTs for arbitrary file metadata requires careful design and testing.
+\textbf{Operational transformation} (OT) \cite{sun1998} tracks individual editing operations (insert character at position 5, delete characters 3 through 7) and transforms them so they can be applied in any order. Google Docs relies on this. OT is powerful for text, but it requires operation-level logging. For binary files like images, spreadsheets, or compiled code, there are no ``operations'' to transform.
 
-\textbf{Last-Write-Wins (LWW)} keeps whichever version has the highest timestamp. One version is lost. The Bayou system \cite{bayou1995} showed that LWW works when combined with backups: before overwriting, save the old version. Terry et al. \citeyear{terry1994} added ``session guarantees'' so users always see their own writes, even when other updates have not arrived yet.
+\textbf{CRDTs} (Conflict-free Replicated Data Types) \cite{shapiro2011} are data structures that mathematically guarantee convergence. Shapiro et al. proved that any data type whose merge operation is commutative, associative, and idempotent will converge regardless of operation order. This is a strong result. But applying CRDTs to file metadata requires defining what ``merge'' means for each field in the metadata schema, and testing the merge logic thoroughly.
 
-We chose LWW with local backups, following Bayou's approach. The overwritten file is saved before being replaced. This gives us simple conflict resolution with the safety of full recoverability. Our metadata schema is designed so we can add CRDT-based merging later, using the approach described by Shapiro et al. \citeyear{shapiro2011}.
+\textbf{Last-Write-Wins} (LWW) is the simplest policy: keep the version with the highest timestamp. One version is discarded. The Bayou project \cite{bayou1995} demonstrated that LWW becomes safe when combined with backup storage: before overwriting a file, save the old copy somewhere. Terry et al. \citeyear{terry1994} added ``session guarantees,'' ensuring that a user always sees the results of their own writes, even if other peers' updates have not arrived.
 
-Saito and Shapiro's \citeyear{saito2005} survey of optimistic replication confirms that this pattern (local updates with deferred reconciliation and rollback) is standard for systems with weak connectivity.
+After reading these papers, the team debated for two meetings before settling on LWW with backups. CRDTs would be technically better, but implementing and testing them correctly within our timeline was unrealistic. Saito and Shapiro's \citeyear{saito2005} survey of optimistic replication confirmed that our approach, optimistic local updates with deferred reconciliation and rollback, is a well-documented pattern for weakly connected systems. That reassured us. The metadata schema we designed can support CRDTs in a future version, using register-based merge semantics from Shapiro et al. \citeyear{shapiro2011}, so the option remains open.
 
-\subsection{Efficient Data Propagation}
+\subsection{Propagating Updates Efficiently}
 
-Even on a local network, transferring whole files every time is wasteful. Tridgell and Mackerras \citeyear{rsync1996} showed that rolling checksums let two machines find which blocks of a file changed and transfer only the differences. This is how rsync works.
+Tridgell and Mackerras \citeyear{rsync1996} showed that rolling checksums allow two machines to identify which \emph{blocks} of a file have changed and transfer only the differences. This is the core idea behind rsync, and it reduces bandwidth use dramatically for large files with small changes.
 
-Demers et al. \citeyear{demers1987} studied a different problem: how to spread updates across a group of peers reliably. Their ``epidemic algorithms'' model update propagation like a contagion. Each peer that learns of an update passes it to its neighbours, who pass it to theirs, until everyone has it.
+Demers et al. \citeyear{demers1987} studied a separate problem: how to reliably spread updates across a group of peers without a central coordinator. Their ``epidemic'' (gossip) algorithms model updates as a contagion that spreads from peer to peer until everyone has it. The approach is probabilistic but robust, and it scales well.
 
-Our initial design uses whole-file transfers for simplicity. The architecture can accommodate both optimizations later: block-level transfers in the C++ daemon, and gossip-based propagation in the Go coordinator.
+For our initial version, we transfer whole files. It is simpler to implement, simpler to debug, and for files under a few megabytes on a local network, the performance penalty is small. The architecture is designed to support both optimizations later: block-level transfers in the C++ daemon, and gossip propagation in the Go coordinator.
 
 \section{Identified Gap}
 
-Comparing existing tools across five dimensions (membership management, synchronization, history management, file support, and filesystem transparency) shows a clear pattern. Each tool category does well in some areas and poorly in others:
+Comparing existing tools across five dimensions (membership management, synchronization capability, history management, file type support, and filesystem transparency) shows a consistent pattern. The full tables are in Appendix~\ref{app:comparison-tables}; here is the summary:
 
 \begin{itemize}
-    \item Centralized platforms: strong synchronization and usability, weak history management.
-    \item Version control systems: strong history management, weak synchronization automation and usability for non-technical users.
-    \item P2P synchronization tools: strong synchronization and usability, weak history management.
-    \item Local sharing: strong usability, no synchronization or history.
+    \item Cloud platforms score well on synchronization and usability, but poorly on history management and offline use.
+    \item Version control systems score well on history, but poorly on synchronization automation and accessibility for non-technical users.
+    \item P2P sync tools score well on synchronization and usability, but poorly on history management.
+    \item Local sharing tools score well on usability but offer no synchronization or history at all.
 \end{itemize}
 
-The gap is not the absence of any single feature. It is the absence of a tool that does well across all five dimensions at once. Each existing tool was designed for a different purpose (enterprise documents, software development, device mirroring, casual sharing), so none of them covers our use case.
-
-See Appendix~\ref{app:comparison-tables} for the full breakdown.
+The gap is not that any single feature is missing from the market. It is that no tool scores well across all five dimensions simultaneously. Each existing tool was optimised for a different audience (enterprise workers, developers, power users, casual sharers), leaving a gap for small, temporary teams who want something that ``just works'' on a local network with version safety included.
 
 \section{Positioning the Project}
 
-\subsection{Key Differentiators}
-
-Our system differs from existing tools in four ways:
+Our system targets this gap. It differs from existing tools in four concrete ways:
 
 \begin{itemize}
-    \item \textbf{LAN-only operation.} Discovery uses mDNS/DNS-SD on the local network. No external servers, no accounts, no internet needed.
-    \item \textbf{No configuration.} Peers are found automatically. No device IDs to exchange, no invitations to approve, no repositories to create.
-    \item \textbf{Built-in version backups.} Every overwrite saves the old file first. This is a core feature, not an optional setting.
-    \item \textbf{Split architecture.} Go handles networking; C++ handles file watching and hashing. This keeps resource use low on student laptops.
+    \item \textbf{LAN-only, serverless operation.} Peer discovery uses mDNS/DNS-SD on the local subnet. No servers, accounts, or internet connection needed.
+    \item \textbf{Zero configuration.} Peers appear automatically. There is nothing to install per-project, no folder IDs to share, no repositories to initialise.
+    \item \textbf{Automatic version backups.} Every overwrite saves the old file first. This is built into the synchronization protocol, not a feature that must be turned on.
+    \item \textbf{Low-resource split architecture.} Go handles networking (peer coordination, TCP connections). C++ handles file I/O (watching, hashing, disk writes). This keeps CPU and memory use low on student laptops.
 \end{itemize}
 
-\subsection{Design Principles}
+Three design principles guide the project:
 
 \begin{enumerate}
-    \item \textbf{Simplicity.} The shared folder should behave like a normal directory. No staging, no commits, no merge conflicts.
-    \item \textbf{Durability.} Automation must not lose data. Every overwrite keeps the old version. Users can always go back.
-    \item \textbf{Performance.} The tool runs in the background. It should not drain battery or slow down the machine.
+    \item \textbf{Transparency.} The synchronized folder should look and feel like a normal local folder. No special commands. No merge dialogs.
+    \item \textbf{Safety.} If the system changes a file, the old version must be recoverable. No automation should cause permanent data loss.
+    \item \textbf{Lightness.} The tool runs continuously in the background. It must not drain battery life or make the laptop feel slow.
 \end{enumerate}
 
 \section{Summary}
 
-Three things from the literature shaped this project the most:
+The literature review taught us three things that directly determined the design of this project.
 
-First, the CAP theorem means we must choose availability over consistency. Students cannot be expected to coordinate edits or wait for the network. The system has to work offline and reconcile later.
+The CAP theorem says we must accept eventual consistency. Students disconnect constantly, and a synchronization tool that stops working when someone closes their laptop is useless. The system has to let everyone work offline and sort out differences later.
 
-Second, conflict resolution is a trade-off. For a small number of peers editing mixed file types, LWW with backups gives the best balance of simplicity and safety. CRDTs are better in theory but add complexity our timeline does not allow. Our schema supports adding them later.
+For conflict resolution, the right choice depends on scale and timeline. LWW with backups gives us simple, predictable behaviour with no risk of permanent data loss. CRDTs would be better for a production system, but they are complex to implement correctly. The schema supports adding them later.
 
-Third, no existing tool targets the design space we are working in. This is not because the space is unimportant, but because existing tools were built for different users. Our contribution is putting together known techniques (mDNS, Lamport clocks, LWW, TCP) into a package built for small-team, short-term collaboration.
+No existing tool occupies the design space we are targeting. Cloud services, version control, P2P sync, and local sharing each solve part of the problem. None of them solve all of it at once, for a small team, on a local network, with no setup. That is where our project fits.

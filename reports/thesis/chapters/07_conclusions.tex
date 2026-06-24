@@ -1,28 +1,28 @@
 \chapter{Conclusions}
 
-This thesis addressed the problem of file synchronization for small collaborative teams that need something simpler than Git but safer than basic file mirroring.
+When this project started, the problem seemed straightforward: build a tool that lets a small group of students share files on a local network without setting up servers or learning Git. The research and design process revealed that the problem is more nuanced than it appears. Distributed synchronization, even for a handful of peers, touches on event ordering, consistency models, and conflict resolution, all topics with decades of research behind them.
 
-We identified a gap in existing tools. Centralized services need external infrastructure and accounts. Version control systems require technical knowledge and manual workflows. Peer-to-peer sync tools lack version safety. No existing tool combines automatic local-network synchronization with built-in version backups and zero configuration.
+The literature review (Chapter~2) showed that existing tools each solve part of the problem. Cloud services handle synchronization well but depend on external infrastructure. Git handles versioning well but requires technical expertise. Syncthing handles peer-to-peer transfer well but treats versioning as an afterthought. No existing tool scores well across all five evaluation dimensions (membership, synchronization, history, file support, and transparency) simultaneously.
 
-Our system fills this gap with a two-process architecture. The Go networking daemon handles peer discovery (mDNS/DNS-SD), synchronization coordination (Lamport clocks with LWW conflict resolution), and TCP file transfer. The C++ storage daemon handles file watching, hashing, backups, and disk I/O. Together, they provide a shared directory that behaves like a normal folder while synchronizing across peers on the same network.
+The system described in this thesis fills that gap. The Go networking daemon discovers peers through mDNS/DNS-SD and coordinates synchronization using per-file Lamport clocks with Last-Write-Wins conflict resolution. The C++ storage daemon watches the filesystem for changes, computes content hashes, and creates backups before every overwrite. The Java frontend shows users what is happening without requiring them to understand the underlying protocols.
 
-The design makes trade-offs that fit our target use case:
-
-\begin{itemize}
-    \item Lamport clocks instead of vector clocks: simpler but cannot detect truly concurrent edits.
-    \item Last-Write-Wins instead of CRDTs: simpler but one version is discarded (with backup).
-    \item Whole-file transfers instead of delta sync: simpler but uses more bandwidth.
-\end{itemize}
-
-These choices work for 3 to 5 peers on a local network. Scaling further would require revisiting them.
-
-Future work includes:
+The design makes three deliberate trade-offs:
 
 \begin{itemize}
-    \item Block-level delta synchronization using the rsync rolling-checksum algorithm to reduce bandwidth for large files.
-    \item CRDT-based metadata merging to allow conflict-free convergence without LWW.
-    \item Cross-subnet discovery for peers on different networks.
-    \item Mobile platform support, where filesystem access and background execution work differently.
+    \item \textbf{Lamport clocks instead of vector clocks.} Simpler to implement and manage when peers join and leave, but unable to detect truly concurrent edits.
+    \item \textbf{LWW instead of CRDTs.} One version is chosen automatically; the other is preserved in a backup. Simple and predictable, but not conflict-free in the CRDT sense.
+    \item \textbf{Whole-file transfers instead of delta sync.} Easy to implement and debug, but wasteful for large files with small changes.
 \end{itemize}
 
-The project shows that a simple, serverless synchronization tool is feasible by combining well-understood protocols (mDNS, TCP, SHA-256) with a practical conflict resolution approach (LWW with backups).
+Each of these trade-offs is appropriate for 3 to 5 peers on a local network with a project timeline of a few months. A production system serving hundreds of users would need to revisit all three.
+
+Several directions for future work remain:
+
+\begin{itemize}
+    \item \textbf{Block-level delta synchronization.} Implementing the rsync rolling-checksum algorithm in the C++ daemon to transfer only changed blocks, reducing bandwidth for large files.
+    \item \textbf{CRDT-based metadata.} Extending the SQLite schema to use state-based CRDTs for file metadata, enabling conflict-free convergence without LWW.
+    \item \textbf{Cross-subnet discovery.} Supporting peers on different subnets, possibly through a lightweight relay, while preserving zero-configuration on local networks.
+    \item \textbf{Mobile support.} Adapting the architecture for Android and iOS, where background execution and filesystem access are more restricted than on desktop operating systems.
+\end{itemize}
+
+What this project demonstrates is that the individual building blocks for lightweight peer-to-peer synchronization, mDNS, Lamport clocks, LWW, TCP, SHA-256, are well-understood and well-documented. The challenge is not inventing new algorithms. It is combining existing ones into a package that is simple enough for non-technical users, safe enough that no data is lost, and light enough to run unnoticed on a student laptop. That is what this system sets out to do.

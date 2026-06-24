@@ -1,60 +1,105 @@
 \chapter{System Architecture}
 
-This chapter describes the design adopted to achieve the objectives stated in the Introduction. The system splits work between two cooperating processes: a Go networking component and a C++ storage component, connected by IPC.
+\section*{Summary}
+This chapter describes the design adopted to achieve the objectives stated in the Introduction. The architecture splits the system into two cooperating processes, a Go networking daemon and a C++ storage daemon, connected by inter-process communication. A Java frontend provides the user interface. Figure~\ref{fig:architecture} shows how the components relate to each other.
 
 \section{System Architecture Anticipated}
 \label{sec:arch-anticipated}
 
-\subsection{Components}
+\subsection{Component Overview}
 
-The system has three main components:
+The decision to use two separate daemons was not arbitrary. Go has strong support for networking, concurrency, and cross-platform compilation, making it well-suited for peer discovery and synchronization coordination. C++ provides the low-level control needed for memory-mapped file I/O, kernel event APIs, and high-performance hashing. Running them as separate processes also means a crash in one does not take down the other.
 
 \begin{enumerate}
-    \item \textbf{Go Networking Daemon.} Handles peer discovery through mDNS/DNS-SD, manages TCP connections with peers, coordinates synchronization state, and runs an IPC server for communication with the storage daemon and the frontend.
+    \item \textbf{Go Networking Daemon.} Responsible for mDNS/DNS-SD peer discovery, managing TCP connection pools with discovered peers, coordinating which files need to be synchronised, and running the IPC server that the C++ daemon and Java frontend connect to.
 
-    \item \textbf{C++ Storage Daemon.} Handles local filesystem work: file watching (inotify/FSEvents), SHA-256 hashing with memory-mapped I/O, version backups before overwrites, and writing incoming files to disk.
+    \item \textbf{C++ Storage Daemon.} Responsible for kernel-level file watching (inotify on Linux, FSEvents on macOS), computing SHA-256 hashes with memory-mapped I/O, creating version backups before overwrites, and streaming incoming files directly to disk from TCP sockets.
 
-    \item \textbf{Java Frontend.} A graphical interface for monitoring sync status, browsing version history, and managing shared folders. It talks to the Go daemon through IPC.
+    \item \textbf{Java Frontend.} A desktop application showing the current synchronization status, the list of connected peers, a file-by-file version history, and controls for choosing the synchronization directory. It communicates with the Go daemon through IPC.
 \end{enumerate}
 
-\subsection{Data Flow}
+\subsection{Architecture Diagram}
 
-A typical synchronization cycle works as follows:
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+    node distance=1.5cm and 2.5cm,
+    component/.style={draw, rounded corners, minimum width=3cm, minimum height=1.2cm, align=center, font=\small},
+    label/.style={font=\footnotesize\itshape, text=gray},
+    arrow/.style={-{Stealth[length=3mm]}, thick}
+]
+
+% Go Daemon
+\node[component, fill=blue!15] (go) {Go Networking\\Daemon};
+
+% C++ Daemon
+\node[component, fill=orange!15, below=2cm of go] (cpp) {C++ Storage\\Daemon};
+
+% Java Frontend
+\node[component, fill=green!15, right=3cm of go] (java) {Java\\Frontend};
+
+% Remote Peer
+\node[component, fill=gray!15, left=3cm of go] (peer) {Remote\\Peer};
+
+% Filesystem
+\node[component, fill=yellow!15, below=2cm of cpp] (fs) {Local\\Filesystem};
+
+% SQLite
+\node[component, fill=purple!15, right=3cm of cpp] (db) {SQLite\\Metadata DB};
+
+% Connections
+\draw[arrow, <->] (go) -- node[right, label] {IPC (Unix socket)} (cpp);
+\draw[arrow, <->] (go) -- node[above, label] {IPC} (java);
+\draw[arrow, <->] (go) -- node[above, label] {TCP / mDNS} (peer);
+\draw[arrow, <->] (cpp) -- node[right, label] {inotify / FSEvents} (fs);
+\draw[arrow, <->] (cpp) -- node[above, label] {Read/Write} (db);
+
+\end{tikzpicture}
+\caption{System architecture showing the Go networking daemon, C++ storage daemon, Java frontend, and their communication channels.}
+\label{fig:architecture}
+\end{figure}
+
+\subsection{Synchronization Data Flow}
+
+A typical synchronization cycle proceeds through eight steps:
 
 \begin{enumerate}
-    \item The C++ watcher detects a file change and computes the new SHA-256 hash.
-    \item It sends a metadata update (file path, hash, Lamport timestamp) to the Go daemon through IPC.
-    \item The Go daemon increments the file's Lamport counter and sends the update to connected peers.
-    \item Receiving peers compare the incoming timestamp against their local metadata.
-    \item If the incoming version is newer, the Go daemon requests a file transfer from the sender.
-    \item The file is sent over TCP directly to the C++ daemon on the receiving machine.
-    \item Before writing the new file, the C++ daemon saves the existing version in the \texttt{.versions/} directory.
-    \item The new file is written and the local metadata database is updated.
+    \item The C++ daemon detects a file change through a kernel event and computes the new SHA-256 hash.
+    \item It sends a metadata update (file path, new hash, incremented Lamport timestamp) to the Go daemon through IPC.
+    \item The Go daemon broadcasts the metadata to all connected peers over TCP.
+    \item Each receiving peer compares the incoming timestamp against its local copy.
+    \item If the incoming version is newer, the receiving Go daemon requests the full file from the sender.
+    \item The file data is streamed over TCP directly to the receiving C++ daemon.
+    \item Before writing the incoming file to disk, the receiving C++ daemon copies the existing version to the \texttt{.versions/} directory.
+    \item The new file is written, and the local SQLite metadata database is updated.
 \end{enumerate}
 
 \subsection{Metadata Storage}
 
-Each peer keeps a local SQLite database with:
+Each peer maintains a local SQLite database. The schema stores one row per tracked file:
+
 \begin{itemize}
-    \item File path (relative to the sync root)
-    \item SHA-256 content hash
-    \item Lamport timestamp
-    \item Last modification time (for display only)
-    \item File size in bytes
+    \item \textbf{path}: file path relative to the sync root
+    \item \textbf{sha256}: content hash (32 bytes, hex-encoded)
+    \item \textbf{lamport\_ts}: the file's Lamport clock value (integer)
+    \item \textbf{mtime}: last modification time (for display; not used for ordering)
+    \item \textbf{size}: file size in bytes
 \end{itemize}
 
-The schema is designed so it can be extended to support CRDTs later without breaking the existing protocol.
+The schema was designed with future extensibility in mind. Adding columns for CRDT state (e.g., a vector of per-peer counters) would not require restructuring the synchronization protocol.
 
 \subsection{Communication Protocols}
 
+Four communication channels are used:
+
 \begin{itemize}
-    \item \textbf{Discovery:} mDNS multicast on the local subnet (port 5353), advertising the \texttt{\_p2psync.\_tcp} service.
-    \item \textbf{Coordination:} Custom protocol over TCP for metadata exchange (file lists, version comparisons, transfer requests).
-    \item \textbf{File Transfer:} Direct TCP streaming between peers. The Go daemon sets up the connection and passes the socket to C++ for I/O.
-    \item \textbf{IPC:} Unix domain sockets between the Go and C++ daemons on the same machine.
+    \item \textbf{Discovery:} mDNS multicast on port 5353, advertising the \texttt{\_p2psync.\_tcp} service type.
+    \item \textbf{Coordination:} A lightweight custom protocol over TCP for exchanging file metadata (file lists, version comparisons, transfer requests).
+    \item \textbf{File Transfer:} Direct TCP streaming. The Go daemon sets up the connection; the C++ daemon handles the actual file I/O.
+    \item \textbf{Internal IPC:} Unix domain sockets between the Go and C++ daemons on the same machine.
 \end{itemize}
 
 \section{System Architecture Updated}
 \label{sec:arch-updated}
 
-\textit{This section will be completed at the end of Action Learning Week. It will document any changes to the architecture that came up during implementation, including modifications to the component structure, protocol changes, and lessons learned.}
+\textit{This section will be completed at the end of Action Learning Week. It will document changes to the architecture that emerged during implementation: what worked as planned, what had to be modified, and what lessons came from the integration process.}

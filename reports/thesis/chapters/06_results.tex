@@ -1,47 +1,26 @@
 \chapter{Results}
 
-This chapter covers the expected results from the project and, after Action Learning Week, the actual outcomes.
+\section*{Summary}
+This chapter details the results of what was learned and accomplished during the project.
 
 \section{Development Anticipated}
 \label{sec:results-anticipated}
 
-Based on the architecture and methodology described above, we expect the following:
+Based on the architecture in Chapter~4 and the methodology in Chapter~5, the following development outcomes are planned:
 
-\begin{enumerate}
-    \item \textbf{Go Networking Daemon} that can:
-    \begin{itemize}
-        \item Discover peers on the local network through mDNS/DNS-SD.
-        \item Maintain TCP connections with discovered peers.
-        \item Exchange file metadata (paths, hashes, Lamport timestamps) to detect changes.
-        \item Request and coordinate file transfers.
-        \item Communicate with the local C++ daemon through Unix domain sockets.
-    \end{itemize}
+\textbf{Go Networking Daemon.} A working daemon that discovers peers on the local subnet through mDNS/DNS-SD, maintains persistent TCP connections with them, exchanges file metadata to detect changes, coordinates file transfers, and communicates with the C++ daemon through Unix domain sockets. The core packages (\texttt{discovery}, \texttt{network}, \texttt{ipc}) are already prototyped and tested independently; integration is the remaining work.
 
-    \item \textbf{C++ Storage Daemon} that can:
-    \begin{itemize}
-        \item Watch the synchronized directory for changes using kernel-level APIs (inotify on Linux, FSEvents on macOS).
-        \item Compute SHA-256 hashes of changed files using memory-mapped I/O.
-        \item Save existing files to a \texttt{.versions/} directory before overwriting.
-        \item Write incoming file data directly to disk from a TCP socket.
-    \end{itemize}
+\textbf{C++ Storage Daemon.} A working daemon that watches the synchronization directory using kernel-level APIs (inotify on Linux, FSEvents on macOS), computes SHA-256 hashes of modified files with memory-mapped I/O, saves existing files to a \texttt{.versions/} directory before any overwrite, and streams incoming file data directly from TCP sockets to disk.
 
-    \item \textbf{Java Frontend} that shows:
-    \begin{itemize}
-        \item Current sync status (connected peers, progress).
-        \item File version history with the option to restore old versions.
-        \item Workspace settings (sync directory, peer list).
-    \end{itemize}
+\textbf{Java Frontend.} A desktop application that shows the current synchronization status (which peers are connected, which files are syncing), displays a per-file version history with the ability to restore a previous version, and lets users configure the synchronization directory.
 
-    \item \textbf{Hypothesis Testing:}
-    \begin{itemize}
-        \item[$H_1$:] Sync latency measurements across 3 to 5 peers on campus WLAN, targeting sub-second averages for files under 10\,MB.
-        \item[$H_2$:] Concurrent edit tests showing no permanent data loss, convergence within 30 seconds, and recoverability from backups.
-    \end{itemize}
-\end{enumerate}
+\textbf{Hypothesis Testing.} Two sets of measurements:
+\begin{itemize}
+    \item $H_1$ (Latency): timed synchronization tests across 3 to 5 peers on the campus WLAN, for files ranging from 1\,KB to 10\,MB. Target: sub-second average latency.
+    \item $H_2$ (Consistency): concurrent edit scenarios where two peers modify the same file while disconnected, then reconnect. Expected outcome: automatic resolution with no permanent data loss, convergence within 30 seconds, and full recoverability from backups.
+\end{itemize}
 
 \section{Development Updated}
 \label{sec:results-updated}
 
-\textit{This section will be completed at the end of Action Learning Week. It will describe the differences between what was planned and what was actually built, including features that were added, changed, or deferred.}
-
-\textit{Maximum one-half page.}
+\textit{This section will be completed at the end of Action Learning Week in a separate standalone document. It will describe the differences between what was anticipated above and what was actually developed: features that were completed, features that were modified, and features that were deferred. Maximum one-half page.}
