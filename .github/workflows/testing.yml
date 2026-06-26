@@ -1,0 +1,27 @@
+name: Build Testing
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: CMake configure
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=Release
+
+      - name: CMake build
+        run: |
+          cmake --build build --config Release --parallel
+
+      - name: Run CMake tests
+        working-directory: build
+        run: ctest --output-on-failure
