@@ -617,6 +617,74 @@ func (sc *SyncCoordinator) HandleIPCMessage(msg *ipc.Message) error {
 			return err
 		}
 		return sc.HandleLocalFileChanged(payload.RepoID, &payload.FileChangedPayload)
+
+	case "repo_list_request":
+		repos, err := sc.db.Repositories().List()
+		if err != nil {
+			return err
+		}
+		type RepoInfo struct {
+			ID   string `json:"id"`
+			Path string `json:"path"`
+		}
+		list := make([]RepoInfo, 0)
+		for _, r := range repos {
+			list = append(list, RepoInfo{ID: r.ID, Path: r.LocalPath})
+		}
+		respPayload, _ := json.Marshal(map[string]interface{}{
+			"repos": list,
+		})
+		resp := &ipc.Message{
+			Version:   "1.0",
+			Type:      "repo_list_response",
+			Source:    "go",
+			Timestamp: time.Now().UnixNano() / int64(time.Millisecond),
+			Payload:   respPayload,
+		}
+		sc.ipcServer.SendMessage(resp)
+		return nil
+
+	case "repo_status_request":
+		var payload struct {
+			RepoID string `json:"repo_id"`
+		}
+		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+			return err
+		}
+		files, err := sc.db.Metadata().ListByRepository(payload.RepoID, false)
+		if err != nil {
+			return err
+		}
+		type FileInfo struct {
+			Path         string `json:"path"`
+			Hash         string `json:"hash"`
+			Size         int64  `json:"size"`
+			Version      int64  `json:"version"`
+			ModifiedTime int64  `json:"modified_time"`
+		}
+		list := make([]FileInfo, 0)
+		for _, f := range files {
+			list = append(list, FileInfo{
+				Path:         f.Filepath,
+				Hash:         f.Hash,
+				Size:         f.Size,
+				Version:      f.Version,
+				ModifiedTime: f.LocalLastModified,
+			})
+		}
+		respPayload, _ := json.Marshal(map[string]interface{}{
+			"repo_id": payload.RepoID,
+			"files":   list,
+		})
+		resp := &ipc.Message{
+			Version:   "1.0",
+			Type:      "repo_status_response",
+			Source:    "go",
+			Timestamp: time.Now().UnixNano() / int64(time.Millisecond),
+			Payload:   respPayload,
+		}
+		sc.ipcServer.SendMessage(resp)
+		return nil
 	}
 	return nil
 }

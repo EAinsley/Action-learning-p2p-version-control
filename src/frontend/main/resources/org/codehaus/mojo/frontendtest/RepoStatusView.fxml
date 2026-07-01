@@ -14,17 +14,15 @@
 
 <BorderPane xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml/1"
             fx:controller="org.codehaus.mojo.frontendtest.RepoStatusController"
-            prefWidth="380" prefHeight="340"
-            style="-fx-background-color: white; -fx-border-color: black; -fx-border-width: 3;">
+            prefWidth="600" prefHeight="450"
+            styleClass="root">
 
     <!-- Title bar -->
     <top>
         <Label fx:id="repoNameLabel" text="Repository name" maxWidth="Infinity"
-               style="-fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: black;
-                      -fx-border-color: black; -fx-border-width: 0 0 3 0;
-                      -fx-padding: 8 10 8 10;"/>
+               styleClass="title-label"
+               style="-fx-border-color: #334155; -fx-border-width: 0 0 1 0; -fx-padding: 12 15 12 15;"/>
     </top>
-
 
     <center>
         <GridPane>
@@ -38,20 +36,18 @@
 
             <!-- Left panel -->
             <VBox GridPane.columnIndex="0" GridPane.rowIndex="0"
-                  style="-fx-border-color: black; -fx-border-width: 0 3 0 0;">
-                <Label text="Files in repository." wrapText="true"
-                       style="-fx-font-size: 13px; -fx-padding: 8 8 8 8;"/>
+                  style="-fx-border-color: #334155; -fx-border-width: 0 1 0 0; -fx-padding: 10;">
+                <Label text="Files in Repository" styleClass="section-label"/>
                 <ListView fx:id="filesListView" VBox.vgrow="ALWAYS"
-                          style="-fx-border-width: 0;"/>
+                          style="-fx-background-color: transparent;"/>
             </VBox>
 
             <!-- Right panel -->
-            <VBox GridPane.columnIndex="1" GridPane.rowIndex="0">
-                <Label text="List of changes" wrapText="true"
-                       style="-fx-font-size: 13px; -fx-padding: 8 8 8 8;"/>
+            <VBox GridPane.columnIndex="1" GridPane.rowIndex="0"
+                  style="-fx-padding: 10;">
+                <Label text="Sync Log / Events" styleClass="section-label"/>
                 <TextArea fx:id="changesTextArea" editable="false" wrapText="true"
-                          VBox.vgrow="ALWAYS"
-                          style="-fx-font-family: 'Consolas', 'Monospaced'; -fx-border-width: 0;"/>
+                          VBox.vgrow="ALWAYS"/>
             </VBox>
         </GridPane>
     </center>
@@ -59,13 +55,13 @@
     <!-- Bottom status bar -->
     <bottom>
         <HBox alignment="CENTER_LEFT"
-              style="-fx-border-color: black; -fx-border-width: 3 0 0 0;">
-            <Label fx:id="syncStatusLabel" text="sync status:"
-                   style="-fx-padding: 6 10 6 10; -fx-border-color: black; -fx-border-width: 0 3 0 0;"  HBox.hgrow="ALWAYS"  maxWidth="Infinity"/>
-            <Label fx:id="peersLabel" text="peers : (number)"
-                   style="-fx-padding: 6 10 6 10; -fx-border-color: black; -fx-border-width: 0 3 0 0;"   HBox.hgrow="ALWAYS"  maxWidth="Infinity"/>
-            <Label fx:id="onlineStatusLabel" text="Online/offline"
-                   style="-fx-padding: 6 10 6 10;"  HBox.hgrow="ALWAYS"  maxWidth="Infinity"/>
+              style="-fx-border-color: #334155; -fx-border-width: 1 0 0 0; -fx-background-color: #1e293b;">
+            <Label fx:id="syncStatusLabel" text="sync status: Initializing"
+                   style="-fx-padding: 8 12 8 12; -fx-border-color: #334155; -fx-border-width: 0 1 0 0; -fx-text-fill: #94a3b8;"  HBox.hgrow="ALWAYS"  maxWidth="Infinity"/>
+            <Label fx:id="peersLabel" text="peers: 0"
+                   style="-fx-padding: 8 12 8 12; -fx-border-color: #334155; -fx-border-width: 0 1 0 0; -fx-text-fill: #94a3b8;"   HBox.hgrow="ALWAYS"  maxWidth="Infinity"/>
+            <Label fx:id="onlineStatusLabel" text="Offline"
+                   style="-fx-padding: 8 12 8 12; -fx-text-fill: #ef4444; -fx-font-weight: bold;"  HBox.hgrow="ALWAYS"  maxWidth="Infinity"/>
         </HBox>
     </bottom>
 
