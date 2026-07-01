@@ -1,0 +1,49 @@
+name: Build-Testing
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  cmake-testing:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: checkout-source
+        uses: actions/checkout@v4
+
+      - name: cmake-build
+        working-directory: src/backend/cpp
+        run: |
+          mkdir build
+          cd build
+          cmake ..
+          cmake --build .
+
+      - name: run-cmake-tests
+        working-directory: src/backend/cpp
+        run: ctest --test-dir build --output-on-failure
+
+  go-testing:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: src/backend/go
+
+    steps:
+      - name: checkout-source
+        uses: actions/checkout@v4
+
+      - name: setup-go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: src/backend/go/go.mod
+          cache: true
+
+      - name: build-go
+        run: go build ./...
+
+      - name: test-go
+        run: go test ./...

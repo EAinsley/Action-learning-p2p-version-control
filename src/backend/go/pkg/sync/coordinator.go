@@ -617,7 +617,6 @@ func (sc *SyncCoordinator) HandleIPCMessage(msg *ipc.Message) error {
 			return err
 		}
 		return sc.HandleLocalFileChanged(payload.RepoID, &payload.FileChangedPayload)
-
 	case "repo_list_request":
 		repos, err := sc.db.Repositories().List()
 		if err != nil {
