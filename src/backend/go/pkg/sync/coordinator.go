@@ -21,6 +21,7 @@ import (
 type pendingDownload struct {
 	size   int64
 	repoID string
+	mode   uint32
 }
 
 type SyncCoordinator struct {
@@ -181,6 +182,7 @@ func (sc *SyncCoordinator) HandleLocalFileChanged(repoID string, payload *protoc
 		LocalLastModified: payload.ModifiedTime,
 		IsDeleted:         payload.Action == "delete",
 		UpdatedAt:         time.Now().Unix(),
+		Mode:              payload.Mode,
 	}
 
 	if err := sc.db.Metadata().Save(&meta); err != nil {
@@ -214,6 +216,7 @@ func (sc *SyncCoordinator) HandleLocalFileChanged(repoID string, payload *protoc
 		"version":       nextVersion,
 		"modified_time": payload.ModifiedTime,
 		"is_deleted":    payload.Action == "delete",
+		"mode":          payload.Mode,
 	}
 	p2pMsg.Payload, _ = json.Marshal(updatePayload)
 
@@ -229,10 +232,12 @@ func (sc *SyncCoordinator) HandlePeerMetadataUpdate(peerID string, repoID string
 	verVal, _ := update["version"].(float64)
 	modTimeVal, _ := update["modified_time"].(float64)
 	isDeleted, _ := update["is_deleted"].(bool)
+	modeVal, _ := update["mode"].(float64)
 
 	size := int64(sizeVal)
 	version := uint64(verVal)
 	modifiedTime := int64(modTimeVal)
+	mode := uint32(modeVal)
 
 	// 1. Get current local state
 	localMeta, err := sc.db.Metadata().Get(repoID, path)
@@ -274,6 +279,7 @@ func (sc *SyncCoordinator) HandlePeerMetadataUpdate(peerID string, repoID string
 				LocalLastModified: modifiedTime,
 				IsDeleted:         true,
 				UpdatedAt:         time.Now().Unix(),
+				Mode:              mode,
 			}
 			_ = sc.db.Metadata().Save(&meta)
 
@@ -303,6 +309,7 @@ func (sc *SyncCoordinator) HandlePeerMetadataUpdate(peerID string, repoID string
 				Size:      size,
 				Timestamp: time.Unix(modifiedTime, 0),
 				PeerID:    peerID,
+				Mode:      mode,
 			}
 			sc.queue.Push(task)
 		}
@@ -448,6 +455,7 @@ func (sc *SyncCoordinator) executeSyncTask(task *SyncTask) {
 		sc.pendingDownloads[task.FilePath+":"+task.Hash] = pendingDownload{
 			size:   task.Size,
 			repoID: task.RepoID,
+			mode:   task.Mode,
 		}
 		sc.mu.Unlock()
 
@@ -577,7 +585,7 @@ func (sc *SyncCoordinator) HandleP2PMessage(peerID string, msg *ipc.Message) err
 
 		// Start download session: connect to the peer's dynamic transferPort
 		transferID := fmt.Sprintf("dl_%d_%s", time.Now().UnixNano(), pDetails.repoID)
-		err = sc.transferMgr.StartDownload(transferID, payload.Path, peerID, payload.Hash, pDetails.size, host, payload.TransferPort)
+		err = sc.transferMgr.StartDownload(transferID, payload.Path, peerID, payload.Hash, pDetails.size, host, payload.TransferPort, pDetails.mode)
 		if err != nil {
 			log.Printf("[SyncCoordinator] StartDownload failed: %v\n", err)
 		}

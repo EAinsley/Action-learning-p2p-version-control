@@ -20,7 +20,8 @@ void handle_file_transfer(
     int port,
     const std::string &direction,
     long long expected_size,
-    const std::string &expected_hash
+    const std::string &expected_hash,
+    uint32_t mode
 ) {
     std::cout << "[C++ Daemon] Starting file transfer. Path: " << rel_path 
               << ", Port: " << port << ", Direction: " << direction << "\n";
@@ -111,6 +112,17 @@ void handle_file_transfer(
 
             // Atomic rename to replace the target file
             fs::rename(tmp_path, dest_path);
+
+            // Apply file permissions if mode is provided
+            if (mode > 0) {
+                try {
+                    fs::permissions(dest_path, static_cast<fs::perms>(mode));
+                    std::cout << "[C++ Daemon] Applied file permissions " << std::oct << mode << " to " << dest_path << "\n";
+                } catch (const std::exception &e) {
+                    std::cerr << "[C++ Daemon] Warning: Failed to set permissions: " << e.what() << "\n";
+                }
+            }
+
             std::cout << "[C++ Daemon] Download completed atomically. Target: " << dest_path << "\n";
         } catch (const std::exception &e) {
             std::cerr << "[C++ Daemon] Exception during download: " << e.what() << "\n";

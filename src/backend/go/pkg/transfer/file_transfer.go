@@ -45,7 +45,7 @@ func NewFileTransferManager(ipcServer *ipc.IpcServer) *FileTransferManager {
 
 // StartDownload initiates a file download. It connects to the peer's transfer port,
 // sets up a local listener for the C++ daemon to connect to, and proxies the bytes.
-func (ft *FileTransferManager) StartDownload(transferID, filePath, peerID, expectedHash string, expectedSize int64, peerAddr string, peerPort int) error {
+func (ft *FileTransferManager) StartDownload(transferID, filePath, peerID, expectedHash string, expectedSize int64, peerAddr string, peerPort int, mode uint32) error {
 	// 1. Connect to remote peer's TCP transfer socket
 	addr := net.JoinHostPort(peerAddr, strconv.Itoa(peerPort))
 	netConn, err := net.DialTimeout("tcp", addr, 10*time.Second)
@@ -92,6 +92,7 @@ func (ft *FileTransferManager) StartDownload(transferID, filePath, peerID, expec
 		"expected_hash": expectedHash,
 		"expected_size": expectedSize,
 		"direction":     "download",
+		"mode":          mode,
 	}
 	payloadBytes, _ := json.Marshal(payload)
 	msg.Payload = payloadBytes

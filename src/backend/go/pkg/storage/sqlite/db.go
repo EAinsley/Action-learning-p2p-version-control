@@ -32,6 +32,7 @@ var schemaStatements = []string{
 		local_last_modified INTEGER NOT NULL,
 		is_deleted          INTEGER NOT NULL DEFAULT 0,
 		updated_at          INTEGER NOT NULL,
+		mode                INTEGER NOT NULL DEFAULT 420,
 		PRIMARY KEY (repository_id, filepath),
 		FOREIGN KEY (repository_id) REFERENCES repositories(id) ON DELETE CASCADE
 	)`,

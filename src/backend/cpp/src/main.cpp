@@ -40,14 +40,15 @@ void handle_ipc_message(const nlohmann::json &msg, const std::string &watch_path
             std::string expected_hash = payload.value("expected_hash", "");
             long long expected_size = payload.value("expected_size", 0LL);
             std::string direction = payload.value("direction", "download");
+            uint32_t mode = payload.value("mode", 0);
 
             std::cout << "[C++ Daemon] Handled prepare_file_transfer: ID=" << transfer_id 
                       << ", path=" << path << ", port=" << transfer_port 
-                      << ", dir=" << direction << "\n";
+                      << ", dir=" << direction << ", mode=" << std::oct << mode << std::dec << "\n";
 
             // Spawn background thread to perform transfer
             std::thread([=]() {
-                transfer::handle_file_transfer(watch_path, path, transfer_port, direction, expected_size, expected_hash);
+                transfer::handle_file_transfer(watch_path, path, transfer_port, direction, expected_size, expected_hash, mode);
             }).detach();
         } 
         else if (msg_type == "sync_from_peer") {
@@ -170,6 +171,7 @@ int main(int argc, char *argv[]) {
             std::chrono::system_clock::now().time_since_epoch()
         ).count();
 
+        uint32_t mode = 0;
         if (action != "delete" && fs::exists(abs_path)) {
             try {
                 size = fs::file_size(abs_path);
@@ -180,6 +182,10 @@ int main(int argc, char *argv[]) {
                     write_time - fs::file_time_type::clock::now() + std::chrono::system_clock::now()
                 );
                 modified_time = std::chrono::duration_cast<std::chrono::seconds>(sctp.time_since_epoch()).count();
+
+                // Get file permissions mode
+                auto perms = fs::status(abs_path).permissions();
+                mode = static_cast<uint32_t>(perms);
             } catch (const std::exception &e) {
                 std::cerr << "[C++ Daemon] Error processing file metadata: " << e.what() << "\n";
                 return; // Don't notify if we failed to read file metadata
@@ -203,6 +209,7 @@ int main(int argc, char *argv[]) {
         payload["hash"] = hash;
         payload["size"] = size;
         payload["modified_time"] = modified_time;
+        payload["mode"] = mode;
 
         message["payload"] = payload;
 

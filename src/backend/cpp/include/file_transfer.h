@@ -10,7 +10,8 @@ void handle_file_transfer(
     int port,
     const std::string &direction,
     long long expected_size,
-    const std::string &expected_hash
+    const std::string &expected_hash,
+    uint32_t mode
 );
 
 } // namespace transfer
