@@ -91,6 +91,7 @@ func (ft *FileTransferManager) StartDownload(transferID, filePath, peerID, expec
 		"transfer_port": localPort,
 		"expected_hash": expectedHash,
 		"expected_size": expectedSize,
+		"direction":     "download",
 	}
 	payloadBytes, _ := json.Marshal(payload)
 	msg.Payload = payloadBytes
@@ -150,6 +151,7 @@ func (ft *FileTransferManager) StartUpload(transferID, filePath, peerID, expecte
 		"transfer_port": localPort,
 		"expected_hash": expectedHash,
 		"expected_size": expectedSize,
+		"direction":     "upload",
 	}
 	payloadBytes, _ := json.Marshal(payload)
 	msg.Payload = payloadBytes

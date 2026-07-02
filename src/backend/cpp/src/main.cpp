@@ -1,6 +1,7 @@
 #include "filesystem_watcher.h"
 #include "ipc_client.h"
 #include "sha256.h"
+#include "file_transfer.h"
 
 #include <atomic>
 #include <csignal>
@@ -26,7 +27,6 @@ void print_usage(const char *program_name) {
 }
 
 void handle_ipc_message(const nlohmann::json &msg, const std::string &watch_path) {
-    (void)watch_path;
     try {
         std::string msg_type = msg.value("type", "");
         std::cout << "[C++ Daemon] Received IPC message: " << msg_type << "\n";
@@ -41,11 +41,14 @@ void handle_ipc_message(const nlohmann::json &msg, const std::string &watch_path
             long long expected_size = payload.value("expected_size", 0LL);
             std::string direction = payload.value("direction", "download");
 
-            (void)expected_size;
-
             std::cout << "[C++ Daemon] Handled prepare_file_transfer: ID=" << transfer_id 
                       << ", path=" << path << ", port=" << transfer_port 
                       << ", dir=" << direction << "\n";
+
+            // Spawn background thread to perform transfer
+            std::thread([=]() {
+                transfer::handle_file_transfer(watch_path, path, transfer_port, direction, expected_size);
+            }).detach();
         } 
         else if (msg_type == "sync_from_peer") {
             auto payload = msg.at("payload");

@@ -13,6 +13,7 @@ add_executable(cpp_daemon
     src/filesystem_watcher.cpp
     src/ipc_client.cpp
     src/sha256.cpp
+    src/file_transfer.cpp
 )
 
 # Include directories
