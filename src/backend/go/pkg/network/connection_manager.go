@@ -66,6 +66,10 @@ func NewConnectionManager(localPeerID string) *ConnectionManager {
 	}
 }
 
+func (cm *ConnectionManager) LocalPeerID() string {
+	return cm.localPeerID
+}
+
 // StartServer starts the TCP server to listen for incoming P2P connections
 func (cm *ConnectionManager) StartServer(port int) error {
 	addr := ":" + strconv.Itoa(port)

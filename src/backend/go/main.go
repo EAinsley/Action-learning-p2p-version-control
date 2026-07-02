@@ -167,6 +167,9 @@ func sendPeerList(registry *discovery.PeerRegistry, connMgr *network.ConnectionM
 	peerList := make([]protocol.PeerInfo, 0, len(peers))
 
 	for _, p := range peers {
+		if p.ID == connMgr.LocalPeerID() {
+			continue
+		}
 		peerList = append(peerList, protocol.PeerInfo{
 			ID:        p.ID,
 			Name:      p.Name,

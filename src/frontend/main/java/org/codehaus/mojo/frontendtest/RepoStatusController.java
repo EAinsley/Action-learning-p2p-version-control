@@ -37,6 +37,7 @@ public class RepoStatusController {
     private String repoId;
     private Timeline pollTimeline;
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("HH:mm:ss");
+    private boolean connectedLogged = false;
 
     public void setRepoId(String repoId) {
         this.repoId = repoId;
@@ -80,6 +81,11 @@ public class RepoStatusController {
         JsonObject obj = payload.getAsJsonObject();
         if (!obj.has("repo_id") || !obj.get("repo_id").getAsString().equals(repoId)) {
             return;
+        }
+
+        if (!connectedLogged) {
+            connectedLogged = true;
+            logToConsole("Connected to sync daemon. Active.");
         }
 
         if (!obj.has("files") || obj.get("files").isJsonNull()) return;
