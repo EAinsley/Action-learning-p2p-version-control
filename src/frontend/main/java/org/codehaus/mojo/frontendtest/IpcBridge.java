@@ -153,6 +153,12 @@ public class IpcBridge {
     public static synchronized IpcBridge getInstance() {
         if (instance == null) {
             instance = new IpcBridge();
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                System.out.println("[Java] Shutdown hook triggered. Stopping sub-processes...");
+                if (instance != null) {
+                    instance.disconnect();
+                }
+            }));
         }
         return instance;
     }
