@@ -131,7 +131,11 @@ public class IpcBridge {
                     socketPath = System.getenv("IPC_SOCKET");
                 }
                 env.put("IPC_SOCKET", socketPath);
-                env.put("DB_PATH", new java.io.File(baseDir, "p2p_sync.db").getAbsolutePath());
+                String dbPathStr = "p2p_sync.db";
+                if (System.getenv("DB_PATH") != null) {
+                    dbPathStr = System.getenv("DB_PATH");
+                }
+                env.put("DB_PATH", new java.io.File(baseDir, dbPathStr).getAbsolutePath());
                 
                 // Redirect output to a log file instead of inheriting in headless/App bundle mode
                 java.io.File logFile = new java.io.File("/tmp/p2p_go.log");
