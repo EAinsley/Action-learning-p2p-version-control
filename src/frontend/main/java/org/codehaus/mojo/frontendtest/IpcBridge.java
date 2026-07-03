@@ -143,7 +143,18 @@ public class IpcBridge {
                 pbGo.redirectError(ProcessBuilder.Redirect.to(logFile));
                 
                 goProcess = pbGo.start();
-                System.out.println("[Java] Go coordinator started in background.");
+                System.out.println("[Java] Go coordinator started in background (PID: " + goProcess.pid() + ").");
+                
+                // Quick health check: wait briefly and verify process is still alive
+                try {
+                    Thread.sleep(500);
+                    if (!goProcess.isAlive()) {
+                        int exitVal = goProcess.exitValue();
+                        System.err.println("[Java] Go coordinator exited immediately with code " + exitVal + ". Check /tmp/p2p_go.log for details.");
+                    }
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                }
             } else {
                 System.err.println("[Java] Go coordinator binary not found! Cannot start.");
             }
@@ -337,12 +348,27 @@ public class IpcBridge {
         socketChannel = null;
 
         if (goProcess != null && goProcess.isAlive()) {
-            System.out.println("[Java] Terminating Go coordinator process...");
-            goProcess.destroy();
+            System.out.println("[Java] Terminating Go coordinator process (PID: " + goProcess.pid() + ")...");
+            goProcess.destroy(); // SIGTERM
             try {
-                goProcess.waitFor();
-            } catch (InterruptedException ignored) {}
+                boolean exited = goProcess.waitFor(5, java.util.concurrent.TimeUnit.SECONDS);
+                if (!exited) {
+                    System.out.println("[Java] Go coordinator did not exit gracefully. Force killing...");
+                    goProcess.destroyForcibly(); // SIGKILL
+                    goProcess.waitFor(2, java.util.concurrent.TimeUnit.SECONDS);
+                }
+            } catch (InterruptedException ignored) {
+                goProcess.destroyForcibly();
+            }
             goProcess = null;
+        }
+
+        // Clean up stale IPC socket and PID file for next startup
+        try {
+            java.nio.file.Files.deleteIfExists(java.nio.file.Paths.get("/tmp/p2p_sync.sock"));
+            java.nio.file.Files.deleteIfExists(java.nio.file.Paths.get("/tmp/p2p_sync.pid"));
+        } catch (IOException e) {
+            System.err.println("[Java] Warning: Could not clean up temp files: " + e.getMessage());
         }
     }
 }
