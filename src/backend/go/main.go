@@ -264,25 +264,7 @@ func main() {
 		}
 	}
 	startTime := time.Now()
-	mux := http.NewServeMux()
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"pid":          os.Getpid(),
-			"peer_id":      localPeerID,
-			"p2p_port":     p2pPort,
-			"connections":  len(connMgr.ActiveConnections()),
-			"uptime":       time.Since(startTime).String(),
-			"status":       "ok",
-		})
-	})
-	healthSrv := &http.Server{Addr: fmt.Sprintf(":%d", healthPort), Handler: mux}
-	go func() {
-		log.Printf("[Main] Health endpoint listening on :%d\n", healthPort)
-		if err := healthSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Printf("[Main] Health endpoint error: %v\n", err)
-		}
-	}()
+	healthSrv := startHealthEndpoint(healthPort, localPeerID, p2pPort, connMgr, startTime)
 
 	// Graceful shutdown
 	sigChan := make(chan os.Signal, 1)
@@ -332,4 +314,42 @@ func sendPeerList(registry *discovery.PeerRegistry, connMgr *network.ConnectionM
 
 	ipcServer.SendMessage(responseMsg)
 	return nil
+}
+
+// HealthSummary contains the fields returned by the /health endpoint.
+type HealthSummary struct {
+	PID         int    `json:"pid"`
+	PeerID      string `json:"peer_id"`
+	P2PPort     int    `json:"p2p_port"`
+	Connections int    `json:"connections"`
+	Uptime      string `json:"uptime"`
+	Status      string `json:"status"`
+}
+
+func startHealthEndpoint(port int, peerID string, p2pPort int, connMgr interface{ ActiveConnections() map[string]net.Conn }, startTime time.Time) *http.Server {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(HealthSummary{
+			PID:         os.Getpid(),
+			PeerID:      peerID,
+			P2PPort:     p2pPort,
+			Connections: len(connMgr.ActiveConnections()),
+			Uptime:      time.Since(startTime).String(),
+			Status:      "ok",
+		})
+	})
+	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+	if err != nil {
+		log.Printf("[Main] Failed to listen on health port %d: %v\n", port, err)
+		return nil
+	}
+	srv := &http.Server{Handler: mux}
+	go func() {
+		log.Printf("[Main] Health endpoint listening on %s\n", listener.Addr().String())
+		if err := srv.Serve(listener); err != nil && err != http.ErrServerClosed {
+			log.Printf("[Main] Health endpoint error: %v\n", err)
+		}
+	}()
+	return srv
 }
