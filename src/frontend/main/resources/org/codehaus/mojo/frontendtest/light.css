@@ -1,0 +1,14 @@
+.root {
+    -theme-bg: #f8fafc;             /* Light gray background */
+    -theme-text-main: #0f172a;       /* Dark slate main text */
+    -theme-text-muted: #64748b;      /* Muted gray subtext */
+    -theme-text-secondary: #334155;  /* Content dark text */
+    -theme-text-highlight: #000000;  /* Bold black highlight text */
+
+    -theme-card-bg: #ffffff;         /* Stark white components */
+    -theme-border: #cbd5e1;          /* Clean light borders */
+    -theme-border-hover: #94a3b8;    /* Darker border trace on hover */
+
+    -theme-accent: #3b82f6;          /* Retains primary blue accent strength */
+    -theme-accent-hover: #1d4ed8;    /* Deep blue for light mode primary hover */
+}

@@ -12,6 +12,7 @@ import javafx.geometry.Insets;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.GridPane;
+import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import javafx.util.Duration;
 
@@ -21,6 +22,11 @@ import java.util.Map;
 public class RepositoryListController {
     @FXML
     private ListView<String> repoListView;
+    @FXML
+    private VBox rootContainer;
+    @FXML
+    private Button themeToggleButton;
+    private boolean isDarkMode = true;
 
     private Timeline pollTimeline;
 
@@ -37,6 +43,10 @@ public class RepositoryListController {
 
         // Initial request
         IpcBridge.getInstance().send("repo_list_request", new Object());
+        rootContainer.getStylesheets().addAll(
+                getClass().getResource("styles.css").toExternalForm(),
+                getClass().getResource("dark.css").toExternalForm()
+        );
     }
 
     private void handleRepoListResponse(JsonElement payload) {
@@ -65,7 +75,24 @@ public class RepositoryListController {
             repoListView.getSelectionModel().select(selectedIndex);
         }
     }
+    @FXML
+    private void handleThemeToggle() {
+        // 2. Remove only the variable definition layers, keeping styles.css intact
+        rootContainer.getStylesheets().removeIf(sheet ->
+                sheet.contains("dark.css") || sheet.contains("light.css")
+        );
 
+        // 3. Toggle between the variable sheets
+        if (isDarkMode) {
+            rootContainer.getStylesheets().add(getClass().getResource("light.css").toExternalForm());
+            themeToggleButton.setText("darkmode");
+            isDarkMode = false;
+        } else {
+            rootContainer.getStylesheets().add(getClass().getResource("dark.css").toExternalForm());
+            themeToggleButton.setText("lightmode");
+            isDarkMode = true;
+        }
+    }
     @FXML
     protected void handleRepoClick() {
         String selected = repoListView.getSelectionModel().getSelectedItem();
@@ -74,7 +101,13 @@ public class RepositoryListController {
         try {
             FXMLLoader fxmlLoader = new FXMLLoader(HelloApplication.class.getResource("RepoStatusView.fxml"));
             Scene scene = new Scene(fxmlLoader.load(), 600, 450);
-            scene.getStylesheets().add(HelloApplication.class.getResource("styles.css").toExternalForm());
+
+            // FIX: Supply both structural classes and active variable values to the new scene stage
+            String activeThemeFile = isDarkMode ? "dark.css" : "light.css";
+            scene.getStylesheets().addAll(
+                    HelloApplication.class.getResource("styles.css").toExternalForm(),
+                    getClass().getResource(activeThemeFile).toExternalForm()
+            );
 
             RepoStatusController controller = fxmlLoader.getController();
             controller.setRepoId(selected);
@@ -117,7 +150,11 @@ public class RepositoryListController {
         dialog.setTitle(isJoin ? "Join Existing Repository" : "Add New Repository");
         dialog.setHeaderText(isJoin ? "Join a repository shared by a peer" : "Create and track a local repository");
 
-        dialog.getDialogPane().getStylesheets().add(HelloApplication.class.getResource("styles.css").toExternalForm());
+        String activeThemeFile = isDarkMode ? "dark.css" : "light.css";
+        dialog.getDialogPane().getStylesheets().addAll(
+                HelloApplication.class.getResource("styles.css").toExternalForm(),
+                getClass().getResource(activeThemeFile).toExternalForm()
+        );
         dialog.getDialogPane().getStyleClass().add("root");
 
         ButtonType actionButtonType = new ButtonType(isJoin ? "Join" : "Create", ButtonBar.ButtonData.OK_DONE);
