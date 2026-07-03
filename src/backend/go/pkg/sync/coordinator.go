@@ -156,13 +156,15 @@ func (sc *SyncCoordinator) startRepoWorkerLocked(repoID string) {
 			}
 		}
 
-		// 4. Start C++ daemon process
+		// 4. Start C++ daemon process in a new process group
 		var cmd *exec.Cmd
 		if _, err := os.Stat(cppExe); err == nil {
 			log.Printf("[SyncCoordinator] Spawning C++ daemon: %s %s %s %s\n", cppExe, repoID, repo.LocalPath, sc.ipcServer.SocketPath())
 			cmd = exec.Command(cppExe, repoID, repo.LocalPath, sc.ipcServer.SocketPath())
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
+			// Use process group so we can kill the entire group on shutdown
+			cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 			if err := cmd.Start(); err != nil {
 				log.Printf("[SyncCoordinator] Error: Failed to start C++ daemon: %v\n", err)
 			}
@@ -172,11 +174,33 @@ func (sc *SyncCoordinator) startRepoWorkerLocked(repoID string) {
 
 		<-stopCh
 
-		// 5. Clean up C++ daemon process
+		// 5. Clean up C++ daemon process (kill entire process group)
 		if cmd != nil && cmd.Process != nil {
 			log.Printf("[SyncCoordinator] Terminating C++ daemon for repo %s...\n", repoID)
-			_ = cmd.Process.Signal(syscall.SIGTERM)
-			_ = cmd.Wait()
+			// Try SIGTERM to the process group first
+			pgid, err := syscall.Getpgid(cmd.Process.Pid)
+			if err == nil && pgid > 0 {
+				syscall.Kill(-pgid, syscall.SIGTERM)
+			} else {
+				_ = cmd.Process.Signal(syscall.SIGTERM)
+			}
+			// Wait with timeout
+			done := make(chan struct{})
+			go func() {
+				_ = cmd.Wait()
+				close(done)
+			}()
+			select {
+			case <-done:
+			case <-time.After(3 * time.Second):
+				log.Printf("[SyncCoordinator] Force killing C++ daemon for repo %s...\n", repoID)
+				if err == nil && pgid > 0 {
+					syscall.Kill(-pgid, syscall.SIGKILL)
+				} else {
+					_ = cmd.Process.Kill()
+				}
+				_ = cmd.Wait()
+			}
 		}
 
 		log.Printf("[SyncCoordinator] Stopped sync worker for repo %s\n", repoID)
