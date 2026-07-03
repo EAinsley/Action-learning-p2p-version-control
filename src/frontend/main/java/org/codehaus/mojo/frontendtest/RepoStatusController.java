@@ -10,6 +10,7 @@ import javafx.fxml.FXML;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListView;
 import javafx.scene.control.TextArea;
+import javafx.stage.WindowEvent;
 import javafx.util.Duration;
 
 import java.text.SimpleDateFormat;
@@ -38,6 +39,11 @@ public class RepoStatusController {
     private Timeline pollTimeline;
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("HH:mm:ss");
     private boolean connectedLogged = false;
+    private final IpcBridge.MessageListener repoStatusListener = this::handleRepoStatusResponse;
+    private final IpcBridge.MessageListener peerListListener = this::handlePeerListUpdate;
+    private final IpcBridge.MessageListener conflictListener = this::handleConflictDetected;
+    private final IpcBridge.MessageListener syncFromPeerListener = this::handleSyncFromPeer;
+    private final IpcBridge.MessageListener transferCompleteListener = this::handleFileTransferComplete;
 
     public void setRepoId(String repoId) {
         this.repoId = repoId;
@@ -49,11 +55,12 @@ public class RepoStatusController {
 
     public void initialize() {
         // Register listeners for responses
-        IpcBridge.getInstance().registerListener("repo_status_response", this::handleRepoStatusResponse);
-        IpcBridge.getInstance().registerListener("peer_list_update", this::handlePeerListUpdate);
-        IpcBridge.getInstance().registerListener("conflict_detected", this::handleConflictDetected);
-        IpcBridge.getInstance().registerListener("sync_from_peer", this::handleSyncFromPeer);
-        IpcBridge.getInstance().registerListener("file_transfer_complete", this::handleFileTransferComplete);
+        IpcBridge bridge = IpcBridge.getInstance();
+        bridge.registerListener("repo_status_response", repoStatusListener);
+        bridge.registerListener("peer_list_update", peerListListener);
+        bridge.registerListener("conflict_detected", conflictListener);
+        bridge.registerListener("sync_from_peer", syncFromPeerListener);
+        bridge.registerListener("file_transfer_complete", transferCompleteListener);
 
         // Set up periodic polling for file statuses & peer lists
         pollTimeline = new Timeline(new KeyFrame(Duration.seconds(2.0), event -> pollStatus()));
@@ -61,9 +68,20 @@ public class RepoStatusController {
         pollTimeline.play();
 
         // Request initial peer list
-        IpcBridge.getInstance().send("peer_list_request", new Object());
+        bridge.send("peer_list_request", new Object());
         
         logToConsole("Status window initialized. Connecting to sync daemon...");
+
+        // Unregister listeners when the window closes
+        repoNameLabel.sceneProperty().addListener((obs, oldScene, newScene) -> {
+            if (newScene != null) {
+                newScene.windowProperty().addListener((obs2, oldWindow, newWindow) -> {
+                    if (newWindow != null) {
+                        newWindow.addEventFilter(WindowEvent.WINDOW_CLOSE_REQUEST, event -> shutdown());
+                    }
+                });
+            }
+        });
     }
 
     private void pollStatus() {
@@ -197,5 +215,11 @@ public class RepoStatusController {
         if (pollTimeline != null) {
             pollTimeline.stop();
         }
+        IpcBridge bridge = IpcBridge.getInstance();
+        bridge.removeListener("repo_status_response", repoStatusListener);
+        bridge.removeListener("peer_list_update", peerListListener);
+        bridge.removeListener("conflict_detected", conflictListener);
+        bridge.removeListener("sync_from_peer", syncFromPeerListener);
+        bridge.removeListener("file_transfer_complete", transferCompleteListener);
     }
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
@@ -138,6 +139,7 @@ func main() {
 		os.Exit(1)
 	}
 	defer func() {
+		peerRegistry.StopDiscovery()
 		if mdnsServer != nil {
 			mdnsServer.Shutdown()
 		}
@@ -254,12 +256,41 @@ func main() {
 		return nil
 	}
 
+	// HTTP health endpoint
+	healthPort := 8080
+	if envPort := os.Getenv("HEALTH_PORT"); envPort != "" {
+		if val, err := strconv.Atoi(envPort); err == nil {
+			healthPort = val
+		}
+	}
+	startTime := time.Now()
+	mux := http.NewServeMux()
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"pid":          os.Getpid(),
+			"peer_id":      localPeerID,
+			"p2p_port":     p2pPort,
+			"connections":  len(connMgr.ActiveConnections()),
+			"uptime":       time.Since(startTime).String(),
+			"status":       "ok",
+		})
+	})
+	healthSrv := &http.Server{Addr: fmt.Sprintf(":%d", healthPort), Handler: mux}
+	go func() {
+		log.Printf("[Main] Health endpoint listening on :%d\n", healthPort)
+		if err := healthSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Printf("[Main] Health endpoint error: %v\n", err)
+		}
+	}()
+
 	// Graceful shutdown
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	<-sigChan
 
 	fmt.Println("Shutting down...")
+	healthSrv.Close()
 }
 
 func handleFileChanged(msg *ipc.Message, connMgr *network.ConnectionManager) error {

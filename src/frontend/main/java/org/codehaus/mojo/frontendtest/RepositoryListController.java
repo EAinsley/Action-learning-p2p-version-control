@@ -13,6 +13,7 @@ import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.GridPane;
 import javafx.stage.Stage;
+import javafx.stage.WindowEvent;
 import javafx.util.Duration;
 
 import java.util.HashMap;
@@ -23,20 +24,41 @@ public class RepositoryListController {
     private ListView<String> repoListView;
 
     private Timeline pollTimeline;
+    private final IpcBridge.MessageListener repoListListener = this::handleRepoListResponse;
 
     public void initialize() {
+        IpcBridge bridge = IpcBridge.getInstance();
+
         // Register listener for repository list responses from Go
-        IpcBridge.getInstance().registerListener("repo_list_response", this::handleRepoListResponse);
+        bridge.registerListener("repo_list_response", repoListListener);
 
         // Periodically poll for repository list updates to reflect background sync/changes
         pollTimeline = new Timeline(new KeyFrame(Duration.seconds(1.5), event -> {
-            IpcBridge.getInstance().send("repo_list_request", new Object());
+            bridge.send("repo_list_request", new Object());
         }));
         pollTimeline.setCycleCount(Timeline.INDEFINITE);
         pollTimeline.play();
 
         // Initial request
-        IpcBridge.getInstance().send("repo_list_request", new Object());
+        bridge.send("repo_list_request", new Object());
+
+        // Unregister listener when the window closes
+        repoListView.sceneProperty().addListener((obs, oldScene, newScene) -> {
+            if (newScene != null) {
+                newScene.windowProperty().addListener((obs2, oldWindow, newWindow) -> {
+                    if (newWindow != null) {
+                        newWindow.addEventFilter(WindowEvent.WINDOW_CLOSE_REQUEST, event -> shutdown());
+                    }
+                });
+            }
+        });
+    }
+
+    public void shutdown() {
+        if (pollTimeline != null) {
+            pollTimeline.stop();
+        }
+        IpcBridge.getInstance().removeListener("repo_list_response", repoListListener);
     }
 
     private void handleRepoListResponse(JsonElement payload) {

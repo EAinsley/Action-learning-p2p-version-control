@@ -36,10 +36,14 @@ public class IpcBridge {
     private Thread readThread;
     private volatile boolean running = false;
     private Process goProcess;
+    private int reconnectFailures;
 
     public interface MessageListener {
         void onMessage(JsonElement payload);
     }
+
+    /** Number of consecutive connection failures before restarting the Go coordinator. */
+    private static final int MAX_RECONNECT_FAILURES = 3;
 
     private static java.io.File getBaseDir() {
         // 1. Primary: Walk up from java.home (always points to embedded JRE inside app bundle)
@@ -87,24 +91,29 @@ public class IpcBridge {
         java.io.File baseDir = getBaseDir();
         System.out.println("[Java] Resolved base directory: " + baseDir.getAbsolutePath());
 
-        // 1. Try to build the Go coordinator if in development environment
-        java.io.File devGoDir = new java.io.File(baseDir, "src/backend/go");
-        if (devGoDir.exists() && devGoDir.isDirectory()) {
-            System.out.println("[Java] Development environment detected. Building Go coordinator...");
-            try {
-                new java.io.File(baseDir, "build").mkdirs();
-                ProcessBuilder pbBuild = new ProcessBuilder("go", "build", "-o", "../../../build/go_coordinator", "main.go");
-                pbBuild.directory(devGoDir);
-                Process buildProc = pbBuild.start();
-                int exitCode = buildProc.waitFor();
-                if (exitCode == 0) {
-                    System.out.println("[Java] Go coordinator built successfully.");
-                } else {
-                    System.err.println("[Java] Go compilation failed with exit code: " + exitCode);
+        // 1. Skip Go build if SKIP_GO_BUILD env var is set (production mode)
+        boolean skipGoBuild = "1".equals(System.getenv("SKIP_GO_BUILD")) || "true".equals(System.getenv("SKIP_GO_BUILD"));
+        if (!skipGoBuild) {
+            java.io.File devGoDir = new java.io.File(baseDir, "src/backend/go");
+            if (devGoDir.exists() && devGoDir.isDirectory()) {
+                System.out.println("[Java] Development environment detected. Building Go coordinator...");
+                try {
+                    new java.io.File(baseDir, "build").mkdirs();
+                    ProcessBuilder pbBuild = new ProcessBuilder("go", "build", "-o", "../../../build/go_coordinator", "main.go");
+                    pbBuild.directory(devGoDir);
+                    Process buildProc = pbBuild.start();
+                    int exitCode = buildProc.waitFor();
+                    if (exitCode == 0) {
+                        System.out.println("[Java] Go coordinator built successfully.");
+                    } else {
+                        System.err.println("[Java] Go compilation failed with exit code: " + exitCode);
+                    }
+                } catch (Exception e) {
+                    System.err.println("[Java] Error compiling Go coordinator: " + e.getMessage());
                 }
-            } catch (Exception e) {
-                System.err.println("[Java] Error compiling Go coordinator: " + e.getMessage());
             }
+        } else {
+            System.out.println("[Java] SKIP_GO_BUILD set — assuming pre-built Go coordinator binary exists.");
         }
 
         // 2. Start Go coordinator
@@ -197,6 +206,7 @@ public class IpcBridge {
                 }
 
                 if (socketChannel != null && socketChannel.isConnected()) {
+                    reconnectFailures = 0;
                     readMessages(socketChannel);
                 }
             } catch (Exception e) {
@@ -209,14 +219,36 @@ public class IpcBridge {
                 socketChannel = null;
             }
 
-            if (running) {
-                try {
-                    // Try to reconnect every 2 seconds if disconnected
-                    Thread.sleep(2000);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    break;
+            if (!running) break;
+
+            reconnectFailures++;
+            if (reconnectFailures >= MAX_RECONNECT_FAILURES) {
+                System.err.println("[Java] " + MAX_RECONNECT_FAILURES + " consecutive connection failures. Restarting Go coordinator...");
+                reconnectFailures = 0;
+                synchronized (this) {
+                    if (goProcess != null && goProcess.isAlive()) {
+                        goProcess.destroy();
+                        try {
+                            boolean exited = goProcess.waitFor(3, java.util.concurrent.TimeUnit.SECONDS);
+                            if (!exited) {
+                                goProcess.destroyForcibly();
+                                goProcess.waitFor(2, java.util.concurrent.TimeUnit.SECONDS);
+                            }
+                        } catch (InterruptedException ignored) {
+                            goProcess.destroyForcibly();
+                        }
+                        goProcess = null;
+                    }
+                    ensureGoCoordinatorRunning();
                 }
+            }
+
+            try {
+                // Throttle reconnect attempts
+                Thread.sleep(2000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
             }
         }
     }
@@ -335,7 +367,14 @@ public class IpcBridge {
         listeners.computeIfAbsent(type, k -> new ArrayList<>()).add(listener);
     }
 
-    public void disconnect() {
+    public void removeListener(String type, MessageListener listener) {
+        List<MessageListener> list = listeners.get(type);
+        if (list != null) {
+            list.remove(listener);
+        }
+    }
+
+    public synchronized void disconnect() {
         running = false;
         if (readThread != null) {
             readThread.interrupt();

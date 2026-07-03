@@ -142,7 +142,12 @@ func (cm *ConnectionManager) handleIncomingConnection(conn net.Conn) {
 	}
 
 	// 2. Send handshake response back
-	respPayload, _ := json.Marshal(HandshakePayload{PeerID: cm.localPeerID})
+	respPayload, err := json.Marshal(HandshakePayload{PeerID: cm.localPeerID})
+	if err != nil {
+		log.Printf("Failed to marshal handshake response: %v\n", err)
+		conn.Close()
+		return
+	}
 	respMsg := &ipc.Message{
 		Version:   "1.0",
 		Type:      "handshake",
@@ -203,7 +208,11 @@ func (cm *ConnectionManager) Connect(peerID, address string, port int) error {
 	}
 
 	// 1. Send initiator handshake
-	reqPayload, _ := json.Marshal(HandshakePayload{PeerID: cm.localPeerID})
+	reqPayload, err := json.Marshal(HandshakePayload{PeerID: cm.localPeerID})
+	if err != nil {
+		conn.Close()
+		return fmt.Errorf("failed to marshal initiator handshake: %w", err)
+	}
 	reqMsg := &ipc.Message{
 		Version:   "1.0",
 		Type:      "handshake",
@@ -546,6 +555,17 @@ func (cm *ConnectionManager) attemptReconnections() {
 			}
 		}(target)
 	}
+}
+
+// ActiveConnections returns a copy of the active connection map for inspection.
+func (cm *ConnectionManager) ActiveConnections() map[string]net.Conn {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+	conns := make(map[string]net.Conn, len(cm.connections))
+	for k, v := range cm.connections {
+		conns[k] = v
+	}
+	return conns
 }
 
 // Port returns the dynamic TCP port of the listening socket.
