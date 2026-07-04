@@ -20,7 +20,7 @@ std::atomic<bool> g_shutdown(false);
 void signal_handler(int /*signal*/) {
     // Only async-signal-safe operations here: write() to stderr, no cout/mutex
     const char msg[] = "\n[C++ Daemon] Received signal, shutting down...\n";
-    ::write(STDERR_FILENO, msg, sizeof(msg) - 1);
+    (void)::write(STDERR_FILENO, msg, sizeof(msg) - 1);
     g_shutdown = true;
 }
 
