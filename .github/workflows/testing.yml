@@ -34,9 +34,7 @@ jobs:
 
       - run: go build ./...
 
-      - run: go test ./... -count=1
-        env:
-          TMPDIR: /tmp
+      - run: go clean -testcache && go test ./... -count=1 -a
 
   cpp-build-test:
     strategy:
