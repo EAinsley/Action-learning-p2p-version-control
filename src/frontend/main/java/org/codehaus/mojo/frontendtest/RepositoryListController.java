@@ -216,4 +216,26 @@ public class RepositoryListController {
             }
         });
     }
+    @FXML
+    protected void handleHelpClick(){
+        try {
+            FXMLLoader fxmlLoader = new FXMLLoader(HelloApplication.class.getResource("helpPage.fxml"));
+            Scene scene = new Scene(fxmlLoader.load(), 600, 450);
+
+            String activeThemeFile = isDarkMode ? "dark.css" : "light.css";
+            scene.getStylesheets().addAll(
+                    HelloApplication.class.getResource("styles.css").toExternalForm(),
+                    getClass().getResource(activeThemeFile).toExternalForm()
+            );
+
+
+
+            Stage stage = new Stage();
+            stage.setTitle("Help page");
+            stage.setScene(scene);
+            stage.show();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
 }

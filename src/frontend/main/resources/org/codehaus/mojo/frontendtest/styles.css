@@ -114,4 +114,45 @@
     -fx-border-width: 1px;
     -fx-alignment: center;
 }
+.label-help {
+    -fx-text-fill: -theme-text-main;
+    -fx-font-weight: 600;
+    -fx-font-size: 12px;
+}
+.label-help:hover{
+    -fx-text-fill: -theme-accent;
+    -fx-underline: true;
+    -fx-cursor: hand;
+}
+
+.text-window-root {
+    -fx-text-fill: -theme-text-main;
+}
+.text-window-root .viewport {
+    -fx-background-color: transparent;
+
+}
+.main-title {
+    -fx-font-size: 26px;
+    -fx-font-weight: 800;
+    -fx-text-fill: -theme-text-main;
+    -fx-padding: 0 0 15 0;
+    -fx-border-color: -theme-border;
+    -fx-border-width: 0 0 2px 0;
+}
+.chapter-title {
+    -fx-font-size: 18px;
+    -fx-font-weight: 700;
+    -fx-text-fill: -theme-text-main;
+    -fx-padding: 5 0;
+}
+.paragraph-flow {
+    -fx-line-spacing: 5px;
+    -fx-padding: 0 0 10 0;
+    -fx-fill: -theme-text-main;
+}
+.paragraph-text {
+    -fx-fill: -theme-text-main;
+}
+
 
