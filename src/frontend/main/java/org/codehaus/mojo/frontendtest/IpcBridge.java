@@ -37,6 +37,8 @@ public class IpcBridge {
     private volatile boolean running = false;
     private Process goProcess;
     private int reconnectFailures;
+    private String resolvedSocketPath;
+    private String resolvedDbPath;
 
     public interface MessageListener {
         void onMessage(JsonElement payload);
@@ -135,16 +137,8 @@ public class IpcBridge {
                 pbGo.directory(baseDir); // Set working directory to project root!
                 
                 Map<String, String> env = pbGo.environment();
-                String socketPath = "/tmp/p2p_sync.sock";
-                if (System.getenv("IPC_SOCKET") != null) {
-                    socketPath = System.getenv("IPC_SOCKET");
-                }
-                env.put("IPC_SOCKET", socketPath);
-                String dbPathStr = "p2p_sync.db";
-                if (System.getenv("DB_PATH") != null) {
-                    dbPathStr = System.getenv("DB_PATH");
-                }
-                env.put("DB_PATH", new java.io.File(baseDir, dbPathStr).getAbsolutePath());
+                env.put("IPC_SOCKET", resolvedSocketPath);
+                env.put("DB_PATH", resolvedDbPath);
                 
                 // Redirect output to a log file instead of inheriting in headless/App bundle mode
                 java.io.File logFile = new java.io.File("/tmp/p2p_go.log");
@@ -172,7 +166,37 @@ public class IpcBridge {
         }
     }
 
-    private IpcBridge() {}
+    private IpcBridge() {
+        // Resolve socket path
+        String socketPath = "/tmp/p2p_sync.sock";
+        if (System.getenv("IPC_SOCKET") != null) {
+            socketPath = System.getenv("IPC_SOCKET");
+        } else {
+            // Include username to avoid multi-user permission conflicts on the same machine
+            socketPath = "/tmp/p2p_sync_" + System.getProperty("user.name") + ".sock";
+        }
+        this.resolvedSocketPath = socketPath;
+
+        // Resolve database path
+        String dbPath;
+        if (System.getenv("DB_PATH") != null) {
+            dbPath = System.getenv("DB_PATH");
+        } else {
+            String userHome = System.getProperty("user.home");
+            java.io.File dbDir;
+            String os = System.getProperty("os.name").toLowerCase();
+            if (os.contains("mac")) {
+                dbDir = new java.io.File(userHome, "Library/Application Support/P2PVersionControl");
+            } else if (os.contains("win")) {
+                dbDir = new java.io.File(System.getenv("APPDATA"), "P2PVersionControl");
+            } else {
+                dbDir = new java.io.File(userHome, ".config/P2PVersionControl");
+            }
+            dbDir.mkdirs();
+            dbPath = new java.io.File(dbDir, "p2p_sync.db").getAbsolutePath();
+        }
+        this.resolvedDbPath = dbPath;
+    }
 
     public static synchronized IpcBridge getInstance() {
         if (instance == null) {
@@ -256,12 +280,8 @@ public class IpcBridge {
     private SocketChannel tryConnect() {
         // 1. Try Unix Domain Socket
         try {
-            String socketPath = "/tmp/p2p_sync.sock";
-            if (System.getenv("IPC_SOCKET") != null) {
-                socketPath = System.getenv("IPC_SOCKET");
-            }
-            System.out.println("Connecting to UNIX Domain Socket at " + socketPath + "...");
-            UnixDomainSocketAddress address = UnixDomainSocketAddress.of(socketPath);
+            System.out.println("Connecting to UNIX Domain Socket at " + resolvedSocketPath + "...");
+            UnixDomainSocketAddress address = UnixDomainSocketAddress.of(resolvedSocketPath);
             SocketChannel channel = SocketChannel.open(StandardProtocolFamily.UNIX);
             channel.connect(address);
             System.out.println("Connected to UNIX domain socket.");
@@ -404,7 +424,7 @@ public class IpcBridge {
 
         // Clean up stale IPC socket and PID file for next startup
         try {
-            java.nio.file.Files.deleteIfExists(java.nio.file.Paths.get("/tmp/p2p_sync.sock"));
+            java.nio.file.Files.deleteIfExists(java.nio.file.Paths.get(resolvedSocketPath));
             java.nio.file.Files.deleteIfExists(java.nio.file.Paths.get("/tmp/p2p_sync.pid"));
         } catch (IOException e) {
             System.err.println("[Java] Warning: Could not clean up temp files: " + e.getMessage());
