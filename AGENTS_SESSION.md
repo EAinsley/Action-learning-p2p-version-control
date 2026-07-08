@@ -10,7 +10,7 @@
 |-------|--------|--------|-------|
 | Roadmap | ws/roadmap | 🟢 Active | Created ADRs 1-8 |
 | Architecture | ws/architecture | ⏳ Pending | — |
-| Security | ws/security | ⏳ Pending | — |
+| Security | ws/security | 🟢 Complete | TLS 1.3 mTLS, peer identity verification (TOFU), rate limiting, input validation |
 | Reliability | ws/reliability | ⏳ Pending | — |
 | Performance | ws/performance | 🟢 Active | Native watchers (inotify/FSEvents/ReadDirectoryChangesW), OpenSSL SHA-256, bounded broadcast, zstd compression, pprof, benchmarks |
 | Java Frontend | ws/java-frontend | ⏳ Pending | — |
