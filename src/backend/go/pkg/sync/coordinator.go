@@ -74,6 +74,12 @@ func NewSyncCoordinator(
 func (sc *SyncCoordinator) Start() error {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
+
+	// Load persisted vector clocks from database
+	if err := sc.loadVectorClocks(); err != nil {
+		log.Printf("[SyncCoordinator] Warning: failed to load vector clocks: %v\n", err)
+	}
+
 	// Load existing active repositories and start workers
 	repos, err := sc.db.Repositories().List()
 	if err != nil {

@@ -1,0 +1,154 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" font-family="'Helvetica Neue', Arial, sans-serif">
+  <!-- White background -->
+  <rect width="960" height="540" fill="#ffffff"/>
+
+  <!-- Title -->
+  <text x="480" y="36" text-anchor="middle" fill="#1a1a1a" font-size="18" font-weight="bold">Networking Architecture</text>
+  <line x1="380" y1="44" x2="580" y2="44" stroke="#ccc" stroke-width="1"/>
+
+  <!-- Legend -->
+  <rect x="30" y="60" width="10" height="10" fill="#e8e8e8" stroke="#999" stroke-width="0.5"/>
+  <text x="46" y="69" fill="#555" font-size="10">Go Coordinator</text>
+  <rect x="160" y="60" width="10" height="10" fill="#f0f0f0" stroke="#999" stroke-width="0.5"/>
+  <text x="176" y="69" fill="#555" font-size="10">C++ Daemon</text>
+  <rect x="280" y="60" width="10" height="10" fill="#fafafa" stroke="#999" stroke-width="0.5"/>
+  <text x="296" y="69" fill="#555" font-size="10">JavaFX UI</text>
+
+  <!-- ===== PEER A ===== -->
+  <!-- Peer container -->
+  <rect x="30" y="85" width="400" height="420" rx="6" fill="none" stroke="#ccc" stroke-width="1.5"/>
+  <text x="50" y="105" fill="#333" font-size="11" font-weight="bold">PEER A</text>
+
+  <!-- Java -->
+  <rect x="55" y="118" width="350" height="32" rx="3" fill="#fafafa" stroke="#999" stroke-width="1"/>
+  <text x="230" y="138" text-anchor="middle" fill="#333" font-size="11">JavaFX Desktop UI</text>
+
+  <!-- IPC arrow -->
+  <line x1="230" y1="150" x2="230" y2="168" stroke="#999" stroke-width="1" stroke-dasharray="3,2"/>
+  <text x="242" y="163" fill="#888" font-size="8">IPC</text>
+
+  <!-- Go box -->
+  <rect x="55" y="170" width="350" height="170" rx="3" fill="#e8e8e8" stroke="#999" stroke-width="1"/>
+  <text x="230" y="190" text-anchor="middle" fill="#333" font-size="11" font-weight="bold">Go Coordinator</text>
+
+  <!-- Go sub components -->
+  <rect x="65" y="200" width="100" height="50" rx="3" fill="#fff" stroke="#bbb" stroke-width="0.8"/>
+  <text x="115" y="218" text-anchor="middle" fill="#333" font-size="9" font-weight="bold">Peer Discovery</text>
+  <text x="115" y="232" text-anchor="middle" fill="#666" font-size="8">mDNS, zeroconf</text>
+  <text x="115" y="244" text-anchor="middle" fill="#666" font-size="8">automatic</text>
+
+  <rect x="175" y="200" width="100" height="50" rx="3" fill="#fff" stroke="#bbb" stroke-width="0.8"/>
+  <text x="225" y="218" text-anchor="middle" fill="#333" font-size="9" font-weight="bold">Connection</text>
+  <text x="225" y="232" text-anchor="middle" fill="#666" font-size="8">TCP, handshake</text>
+  <text x="225" y="244" text-anchor="middle" fill="#666" font-size="8">heartbeat, reconnect</text>
+
+  <rect x="285" y="200" width="105" height="50" rx="3" fill="#fff" stroke="#bbb" stroke-width="0.8"/>
+  <text x="337" y="218" text-anchor="middle" fill="#333" font-size="9" font-weight="bold">Protocol</text>
+  <text x="337" y="232" text-anchor="middle" fill="#666" font-size="8">JSON messages</text>
+  <text x="337" y="244" text-anchor="middle" fill="#666" font-size="8">validation, routing</text>
+
+  <rect x="65" y="260" width="155" height="50" rx="3" fill="#fff" stroke="#bbb" stroke-width="0.8"/>
+  <text x="142" y="278" text-anchor="middle" fill="#333" font-size="9" font-weight="bold">File Transfer</text>
+  <text x="142" y="292" text-anchor="middle" fill="#666" font-size="8">socket handover</text>
+  <text x="142" y="304" text-anchor="middle" fill="#666" font-size="8">io.Copy streaming</text>
+
+  <rect x="230" y="260" width="160" height="50" rx="3" fill="#fff" stroke="#bbb" stroke-width="0.8"/>
+  <text x="310" y="278" text-anchor="middle" fill="#333" font-size="9" font-weight="bold">Version Control</text>
+  <text x="310" y="292" text-anchor="middle" fill="#666" font-size="8">vector clocks, LWW</text>
+  <text x="310" y="304" text-anchor="middle" fill="#666" font-size="8">conflict resolution</text>
+
+  <!-- IPC arrow Go to C++ -->
+  <line x1="230" y1="340" x2="230" y2="358" stroke="#999" stroke-width="1" stroke-dasharray="3,2"/>
+  <rect x="185" y="345" width="90" height="14" rx="2" fill="#f5f5f5" stroke="#ccc" stroke-width="0.5"/>
+  <text x="230" y="355" text-anchor="middle" fill="#888" font-size="7">Unix Socket IPC</text>
+
+  <!-- C++ -->
+  <rect x="55" y="360" width="350" height="42" rx="3" fill="#f0f0f0" stroke="#999" stroke-width="1"/>
+  <text x="230" y="378" text-anchor="middle" fill="#333" font-size="11" font-weight="bold">C++ Daemon</text>
+  <text x="230" y="393" text-anchor="middle" fill="#666" font-size="9">File watching · SHA-256 hashing · Atomic write</text>
+
+  <!-- Folder -->
+  <rect x="380" y="415" width="35" height="35" rx="3" fill="none" stroke="#bbb" stroke-width="1"/>
+  <text x="397" y="438" text-anchor="middle" fill="#999" font-size="16">📁</text>
+
+  <!-- ===== CENTER ===== -->
+  <rect x="450" y="120" width="60" height="340" rx="5" fill="#fafafa" stroke="#ddd" stroke-width="1"/>
+  <text x="480" y="310" text-anchor="middle" fill="#ccc" font-size="9" letter-spacing="3" font-weight="bold">NETWORK</text>
+
+  <!-- Arrows -->
+  <line x1="430" y1="135" x2="455" y2="135" stroke="#666" stroke-width="1.5" marker-end="url(#a)"/>
+  <line x1="505" y1="135" x2="530" y2="135" stroke="#666" stroke-width="1.5" marker-end="url(#a)"/>
+  <text x="480" y="132" text-anchor="middle" fill="#555" font-size="9">mDNS</text>
+
+  <line x1="430" y1="280" x2="455" y2="280" stroke="#666" stroke-width="1.5" marker-end="url(#a)"/>
+  <line x1="505" y1="280" x2="530" y2="280" stroke="#666" stroke-width="1.5" marker-end="url(#a)"/>
+  <text x="480" y="277" text-anchor="middle" fill="#555" font-size="9">TCP :9876</text>
+
+  <line x1="430" y1="380" x2="455" y2="380" stroke="#999" stroke-width="1" stroke-dasharray="5,3" marker-end="url(#a)"/>
+  <line x1="505" y1="380" x2="530" y2="380" stroke="#999" stroke-width="1" stroke-dasharray="5,3" marker-end="url(#a)"/>
+  <text x="480" y="377" text-anchor="middle" fill="#666" font-size="9">DATA</text>
+
+  <!-- ===== PEER B ===== -->
+  <rect x="530" y="85" width="400" height="420" rx="6" fill="none" stroke="#ccc" stroke-width="1.5"/>
+  <text x="920" y="105" text-anchor="end" fill="#333" font-size="11" font-weight="bold">PEER B</text>
+
+  <!-- Java -->
+  <rect x="555" y="118" width="350" height="32" rx="3" fill="#fafafa" stroke="#999" stroke-width="1"/>
+  <text x="730" y="138" text-anchor="middle" fill="#333" font-size="11">JavaFX Desktop UI</text>
+
+  <line x1="730" y1="150" x2="730" y2="168" stroke="#999" stroke-width="1" stroke-dasharray="3,2"/>
+  <text x="742" y="163" fill="#888" font-size="8">IPC</text>
+
+  <!-- Go B -->
+  <rect x="555" y="170" width="350" height="170" rx="3" fill="#e8e8e8" stroke="#999" stroke-width="1"/>
+  <text x="730" y="190" text-anchor="middle" fill="#333" font-size="11" font-weight="bold">Go Coordinator</text>
+
+  <rect x="565" y="200" width="100" height="50" rx="3" fill="#fff" stroke="#bbb" stroke-width="0.8"/>
+  <text x="615" y="218" text-anchor="middle" fill="#333" font-size="9" font-weight="bold">Peer Discovery</text>
+  <text x="615" y="232" text-anchor="middle" fill="#666" font-size="8">mDNS, zeroconf</text>
+  <text x="615" y="244" text-anchor="middle" fill="#666" font-size="8">automatic</text>
+
+  <rect x="675" y="200" width="100" height="50" rx="3" fill="#fff" stroke="#bbb" stroke-width="0.8"/>
+  <text x="725" y="218" text-anchor="middle" fill="#333" font-size="9" font-weight="bold">Connection</text>
+  <text x="725" y="232" text-anchor="middle" fill="#666" font-size="8">TCP, handshake</text>
+  <text x="725" y="244" text-anchor="middle" fill="#666" font-size="8">heartbeat, reconnect</text>
+
+  <rect x="785" y="200" width="105" height="50" rx="3" fill="#fff" stroke="#bbb" stroke-width="0.8"/>
+  <text x="837" y="218" text-anchor="middle" fill="#333" font-size="9" font-weight="bold">Protocol</text>
+  <text x="837" y="232" text-anchor="middle" fill="#666" font-size="8">JSON messages</text>
+  <text x="837" y="244" text-anchor="middle" fill="#666" font-size="8">validation, routing</text>
+
+  <rect x="565" y="260" width="155" height="50" rx="3" fill="#fff" stroke="#bbb" stroke-width="0.8"/>
+  <text x="642" y="278" text-anchor="middle" fill="#333" font-size="9" font-weight="bold">File Transfer</text>
+  <text x="642" y="292" text-anchor="middle" fill="#666" font-size="8">socket handover</text>
+  <text x="642" y="304" text-anchor="middle" fill="#666" font-size="8">io.Copy streaming</text>
+
+  <rect x="730" y="260" width="160" height="50" rx="3" fill="#fff" stroke="#bbb" stroke-width="0.8"/>
+  <text x="810" y="278" text-anchor="middle" fill="#333" font-size="9" font-weight="bold">Version Control</text>
+  <text x="810" y="292" text-anchor="middle" fill="#666" font-size="8">vector clocks, LWW</text>
+  <text x="810" y="304" text-anchor="middle" fill="#666" font-size="8">conflict resolution</text>
+
+  <line x1="730" y1="340" x2="730" y2="358" stroke="#999" stroke-width="1" stroke-dasharray="3,2"/>
+  <rect x="685" y="345" width="90" height="14" rx="2" fill="#f5f5f5" stroke="#ccc" stroke-width="0.5"/>
+  <text x="730" y="355" text-anchor="middle" fill="#888" font-size="7">Unix Socket IPC</text>
+
+  <!-- C++ B -->
+  <rect x="555" y="360" width="350" height="42" rx="3" fill="#f0f0f0" stroke="#999" stroke-width="1"/>
+  <text x="730" y="378" text-anchor="middle" fill="#333" font-size="11" font-weight="bold">C++ Daemon</text>
+  <text x="730" y="393" text-anchor="middle" fill="#666" font-size="9">File watching · SHA-256 hashing · Atomic write</text>
+
+  <rect x="545" y="415" width="35" height="35" rx="3" fill="none" stroke="#bbb" stroke-width="1"/>
+  <text x="562" y="438" text-anchor="middle" fill="#999" font-size="16">📁</text>
+
+  <!-- Bottom bar -->
+  <line x1="30" y1="495" x2="930" y2="495" stroke="#eee" stroke-width="1"/>
+  <text x="50" y="515" fill="#888" font-size="9">Go: networking, coordination, version control</text>
+  <text x="400" y="515" fill="#888" font-size="9">C++: file I/O</text>
+  <text x="620" y="515" fill="#888" font-size="9">Java: desktop UI</text>
+
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#666"/>
+    </marker>
+  </defs>
+</svg>

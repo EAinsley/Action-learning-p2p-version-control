@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 180" font-family="'Helvetica Neue', Arial, sans-serif">
+  <rect width="200" height="180" fill="none"/>
+  <rect x="30" y="30" width="60" height="75" rx="3" fill="none" stroke="#333" stroke-width="1.5"/>
+  <line x1="42" y1="45" x2="78" y2="45" stroke="#333" stroke-width="1"/>
+  <line x1="42" y1="55" x2="78" y2="55" stroke="#333" stroke-width="1"/>
+  <line x1="42" y1="65" x2="68" y2="65" stroke="#333" stroke-width="1"/>
+  <rect x="110" y="30" width="60" height="75" rx="3" fill="none" stroke="#333" stroke-width="1.5"/>
+  <line x1="122" y1="45" x2="158" y2="45" stroke="#333" stroke-width="1"/>
+  <line x1="122" y1="55" x2="158" y2="55" stroke="#333" stroke-width="1"/>
+  <line x1="122" y1="65" x2="158" y2="65" stroke="#333" stroke-width="1"/>
+  <line x1="122" y1="75" x2="148" y2="75" stroke="#333" stroke-width="1"/>
+  <line x1="122" y1="85" x2="158" y2="85" stroke="#333" stroke-width="1"/>
+  <path d="M90,68 L95,55 L100,68" fill="none" stroke="#333" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M110,68 L105,81 L100,68" fill="none" stroke="#333" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
