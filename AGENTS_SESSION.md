@@ -17,5 +17,5 @@
 | Go Coordinator | ws/go-coordinator | ⏳ Pending | — |
 | C++ Daemon | ws/cpp-daemon | ⏳ Pending | — |
 | Testing | ws/testing | ⏳ Pending | — |
-| CI/CD | ws/cicd | ⏳ Pending | — |
+| CI/CD | ws/cicd | 🟢 Active | Windows CI, pre-commit hooks, integration workflow, Docker release, SBOM |
 | Documentation | ws/documentation | ⏳ Pending | — |
