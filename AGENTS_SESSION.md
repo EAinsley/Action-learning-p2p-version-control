@@ -12,7 +12,7 @@
 | Architecture | ws/architecture | ⏳ Pending | — |
 | Security | ws/security | ⏳ Pending | — |
 | Reliability | ws/reliability | ⏳ Pending | — |
-| Performance | ws/performance | ⏳ Pending | — |
+| Performance | ws/performance | 🟢 Active | Native watchers (inotify/FSEvents/ReadDirectoryChangesW), OpenSSL SHA-256, bounded broadcast, zstd compression, pprof, benchmarks |
 | Java Frontend | ws/java-frontend | ⏳ Pending | — |
 | Go Coordinator | ws/go-coordinator | ⏳ Pending | — |
 | C++ Daemon | ws/cpp-daemon | ⏳ Pending | — |
