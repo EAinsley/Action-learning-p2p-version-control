@@ -189,6 +189,11 @@ int main(int argc, char* argv[]) {
 
             std::cout << "[C++ Daemon] Event: " << action << " -> " << event.path << "\n";
 
+            // Skip .tmp files (transfer internals) to prevent metadata races.
+            if (event.path.size() >= 4 && event.path.substr(event.path.size() - 4) == ".tmp") {
+                return;
+            }
+
             nlohmann::json test_json;
             test_json["filename"] = event.path;
             test_json["action"] = action;

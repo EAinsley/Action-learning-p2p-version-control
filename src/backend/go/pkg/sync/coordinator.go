@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -299,6 +300,13 @@ func (sc *SyncCoordinator) HandleLocalFileChanged(repoID string, payload *protoc
 		}
 	}
 
+	// Skip temporary files (.tmp) created during download — they are
+	// internal to the transfer and should never enter the metadata DB.
+	if strings.HasSuffix(payload.Path, ".tmp") {
+		log.Printf("[SyncCoordinator] Ignoring temp file change: %s\n", payload.Path)
+		return nil
+	}
+
 	// 1. Fetch current database metadata
 	existing, err := sc.db.Metadata().Get(repoID, payload.Path)
 	if err == nil && existing != nil {
@@ -373,6 +381,11 @@ func (sc *SyncCoordinator) HandleLocalFileChanged(repoID string, payload *protoc
 // HandlePeerMetadataUpdate processes version changes received from a remote peer.
 func (sc *SyncCoordinator) HandlePeerMetadataUpdate(peerID string, repoID string, update map[string]interface{}) {
 	path, _ := update["path"].(string)
+
+	// Ignore metadata for temporary files — they are transfer internals.
+	if strings.HasSuffix(path, ".tmp") {
+		return
+	}
 	hash, _ := update["hash"].(string)
 	sizeVal, _ := update["size"].(float64)
 	verVal, _ := update["version"].(float64)
