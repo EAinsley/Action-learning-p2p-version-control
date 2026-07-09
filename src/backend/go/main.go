@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"strconv"
@@ -282,6 +283,22 @@ func main() {
 	}
 	startTime := time.Now()
 	healthSrv := startHealthEndpoint(healthPort, localPeerID, p2pPort, connMgr, startTime)
+
+	// pprof profiling (conditionally enabled via P2P_PPROF_ENABLED)
+	if os.Getenv("P2P_PPROF_ENABLED") == "true" {
+		go func() {
+			pprofPort := 6060
+			if envPPort := os.Getenv("P2P_PPROF_PORT"); envPPort != "" {
+				if val, err := strconv.Atoi(envPPort); err == nil {
+					pprofPort = val
+				}
+			}
+			log.Printf("[Main] pprof enabled on :%d\n", pprofPort)
+			if err := http.ListenAndServe(fmt.Sprintf(":%d", pprofPort), nil); err != nil {
+				log.Printf("[Main] pprof server error: %v\n", err)
+			}
+		}()
+	}
 
 	// Graceful shutdown
 	sigChan := make(chan os.Signal, 1)
