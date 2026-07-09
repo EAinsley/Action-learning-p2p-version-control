@@ -118,7 +118,8 @@ public class SettingsDialog {
         VBox networkBox = new VBox(10);
         networkBox.setPadding(new Insets(10));
 
-        TextField ipcSocketField = new TextField(getSetting("ipc_socket", "/tmp/p2p_sync.sock"));
+        String defaultSocket = new java.io.File(System.getProperty("java.io.tmpdir"), "p2p_sync.sock").getAbsolutePath();
+        TextField ipcSocketField = new TextField(getSetting("ipc_socket", defaultSocket));
         ipcSocketField.setPromptText("IPC Socket Path");
 
         TextField p2pPortField = new TextField(String.valueOf(getSetting("p2p_port", 9876)));
