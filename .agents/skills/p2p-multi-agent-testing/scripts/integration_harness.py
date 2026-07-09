@@ -80,17 +80,21 @@ def setup_peer_env(peer_id, p2p_port, db_path, socket_path, dir_path):
     env["P2P_PORT"] = str(p2p_port)
     env["IPC_SOCKET"] = socket_path
     env["DB_PATH"] = db_path
+    env["HEALTH_PORT"] = str(p2p_port + 1000)
+    env["P2P_PID_PATH"] = socket_path.replace(".sock", ".pid")
     return env
 
 
 def start_peer(peer_id, p2p_port, db_path, socket_path, dir_path):
     env = setup_peer_env(peer_id, p2p_port, db_path, socket_path, dir_path)
     log(f"Starting {peer_id} on port {p2p_port}...")
+    
+    log_file_out = open(f"/tmp/p2p_test_{peer_id}.log", "w")
     proc = subprocess.Popen(
         ["./build/go_coordinator"],
         env=env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        stdout=log_file_out,
+        stderr=subprocess.STDOUT,
     )
     processes.append(proc)
     return proc

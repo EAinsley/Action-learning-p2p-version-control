@@ -22,7 +22,7 @@ import (
 	"p2p/pkg/sync"
 )
 
-const pidFilePath = "/tmp/p2p_sync.pid"
+var pidFilePath = "/tmp/p2p_sync.pid"
 
 func writePIDFile() error {
 	pid := os.Getpid()
@@ -75,6 +75,12 @@ func probePort(port int) (bool, error) {
 }
 
 func main() {
+	if envPid := os.Getenv("P2P_PID_PATH"); envPid != "" {
+		pidFilePath = envPid
+	} else if envIpc := os.Getenv("IPC_SOCKET"); envIpc != "" {
+		pidFilePath = strings.TrimSuffix(envIpc, ".sock") + ".pid"
+	}
+
 	// Before anything else: check for stale PID and release its resources
 	checkAndKillStaleProcess()
 

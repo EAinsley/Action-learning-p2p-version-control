@@ -1,6 +1,8 @@
 package sync
 
 import (
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -151,9 +153,9 @@ func (sc *SyncCoordinator) startRepoWorkerLocked(repoID string) {
 		}
 
 		// 2. Find C++ daemon binary
-		cppExe := "./cpp_daemon"
+		cppExe := "./p2p_daemon"
 		if execPath, errExec := os.Executable(); errExec == nil {
-			peerCpp := filepath.Join(filepath.Dir(execPath), "cpp_daemon")
+			peerCpp := filepath.Join(filepath.Dir(execPath), "p2p_daemon")
 			if _, errStat := os.Stat(peerCpp); errStat == nil {
 				cppExe = peerCpp
 			}
@@ -161,9 +163,9 @@ func (sc *SyncCoordinator) startRepoWorkerLocked(repoID string) {
 
 		if _, err := os.Stat(cppExe); os.IsNotExist(err) {
 			candidates := []string{
-				"src/backend/cpp/build/bin/cpp_daemon",
-				"../cpp/build/bin/cpp_daemon",
-				"build/bin/cpp_daemon",
+				"src/backend/cpp/build/bin/p2p_daemon",
+				"../cpp/build/bin/p2p_daemon",
+				"build/bin/p2p_daemon",
 			}
 			for _, c := range candidates {
 				if _, errStat := os.Stat(c); errStat == nil {
@@ -179,8 +181,8 @@ func (sc *SyncCoordinator) startRepoWorkerLocked(repoID string) {
 				log.Println("[SyncCoordinator] C++ daemon binary missing. Attempting build...")
 				_ = exec.Command("cmake", "-B", "src/backend/cpp/build", "-S", "src/backend/cpp").Run()
 				_ = exec.Command("cmake", "--build", "src/backend/cpp/build").Run()
-				if _, errStat := os.Stat("src/backend/cpp/build/bin/cpp_daemon"); errStat == nil {
-					cppExe = "src/backend/cpp/build/bin/cpp_daemon"
+				if _, errStat := os.Stat("src/backend/cpp/build/bin/p2p_daemon"); errStat == nil {
+					cppExe = "src/backend/cpp/build/bin/p2p_daemon"
 				}
 			}
 		}
@@ -241,9 +243,20 @@ func (sc *SyncCoordinator) AddRepository(repoID, localPath string) error {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 
+	cleanedPath := localPath
+	if cp, err := filepath.EvalSymlinks(localPath); err == nil {
+		if abs, err := filepath.Abs(cp); err == nil {
+			cleanedPath = abs
+		}
+	} else {
+		if abs, err := filepath.Abs(localPath); err == nil {
+			cleanedPath = abs
+		}
+	}
+
 	repo := sqlite.Repository{
 		ID:        repoID,
-		LocalPath: localPath,
+		LocalPath: cleanedPath,
 		Status:    "active",
 		SyncMode:  "auto",
 		CreatedAt: time.Now().Unix(),
@@ -284,6 +297,16 @@ func (sc *SyncCoordinator) HandleLocalFileChanged(repoID string, payload *protoc
 
 	if !active {
 		return fmt.Errorf("repository %s is not active", repoID)
+	}
+
+	// 0. Normalize absolute path to relative path
+	if filepath.IsAbs(payload.Path) {
+		repo, err := sc.db.Repositories().Get(repoID)
+		if err == nil && repo != nil {
+			if rel, err := filepath.Rel(repo.LocalPath, payload.Path); err == nil {
+				payload.Path = rel
+			}
+		}
 	}
 
 	// 1. Fetch current database metadata
@@ -790,6 +813,43 @@ func (sc *SyncCoordinator) HandleP2PMessage(peerID string, msg *ipc.Message) err
 
 		if !exists {
 			log.Printf("[SyncCoordinator] Pending download details not found for response: %s\n", payload.Path)
+			return nil
+		}
+
+		if payload.ContentBase64 != "" {
+			data, err := base64.StdEncoding.DecodeString(payload.ContentBase64)
+			if err != nil {
+				log.Printf("[SyncCoordinator] Failed to decode base64 content: %v\n", err)
+				return nil
+			}
+			repo, err := sc.db.Repositories().Get(pDetails.repoID)
+			if err != nil || repo == nil {
+				log.Printf("[SyncCoordinator] Repository not found for inline write: %s\n", pDetails.repoID)
+				return nil
+			}
+			absPath := filepath.Join(repo.LocalPath, payload.Path)
+			err = os.WriteFile(absPath, data, os.FileMode(pDetails.mode))
+			if err != nil {
+				log.Printf("[SyncCoordinator] Failed to write inline file: %v\n", err)
+				return nil
+			}
+			
+			// Update file_metadata in SQLite DB
+			hash := fmt.Sprintf("%x", sha256.Sum256(data))
+			mtime := time.Now().Unix()
+			meta := &sqlite.FileMetadata{
+				RepositoryID:      pDetails.repoID,
+				Filepath:          payload.Path,
+				Hash:              hash,
+				Size:              int64(len(data)),
+				Version:           int64(sc.lamportClock.Tick()),
+				LocalLastModified: mtime,
+				IsDeleted:         false,
+				UpdatedAt:         time.Now().UnixNano() / int64(time.Millisecond),
+				Mode:              pDetails.mode,
+			}
+			_ = sc.db.Metadata().Save(meta)
+			log.Printf("[SyncCoordinator] Inline small-file written successfully: %s\n", payload.Path)
 			return nil
 		}
 

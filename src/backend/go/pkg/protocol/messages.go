@@ -21,6 +21,16 @@ type FileChangedPayload struct {
 
 // Validate checks if the FileChangedPayload fields are correct.
 func (p *FileChangedPayload) Validate() error {
+	// Normalize action names from C++ daemon to match expected Go formats
+	switch p.Action {
+	case "created":
+		p.Action = "add"
+	case "modified":
+		p.Action = "modify"
+	case "deleted":
+		p.Action = "delete"
+	}
+
 	if p.Path == "" {
 		return errors.New("path cannot be empty")
 	}
