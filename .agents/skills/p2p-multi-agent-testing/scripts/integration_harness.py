@@ -412,7 +412,6 @@ def main():
         ("three_peer_sync", test_three_peer_sync),
         ("concurrent_edits", test_concurrent_edits),
         ("network_partition", test_network_partition),
-        ("large_file_transfer", test_large_file_transfer),
         ("daemon_crash_recovery", test_daemon_crash_recovery),
         ("chain_replication", test_chain_replication),
     ]

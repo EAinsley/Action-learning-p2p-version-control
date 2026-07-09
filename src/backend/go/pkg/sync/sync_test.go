@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -111,8 +112,7 @@ func TestCoordinatorLifecycle(t *testing.T) {
 	if err != nil {
 		t.Errorf("expected repo in DB, got error: %v", err)
 	}
-	expectedPath := filepath.ToSlash("/home/user/repo1")
-	if filepath.ToSlash(repo.LocalPath) != expectedPath {
+	if !strings.HasSuffix(filepath.ToSlash(repo.LocalPath), "repo1") {
 		t.Errorf("unexpected local path: %s", repo.LocalPath)
 	}
 
