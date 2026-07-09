@@ -112,11 +112,6 @@ jobs:
           java-version: '21'
           cache: maven
 
-      - name: Install WiX Toolset (for .msi)
-        run: |
-          dotnet tool install --global wix --version 5.0.2
-          wix --version
-
       - name: Build Windows Binaries
         run: |
           mkdir -p build
@@ -130,7 +125,6 @@ jobs:
           cmake -S src/backend/cpp -B src/backend/cpp/build
           cmake --build src/backend/cpp/build --config Release
 
-          # CMake outputs to build/Release/p2p_daemon.exe on Windows (MSVC multi-config)
           $candidates = @(
             "src/backend/cpp/build/Release/p2p_daemon.exe",
             "src/backend/cpp/build/bin/Release/p2p_daemon.exe",
@@ -149,43 +143,53 @@ jobs:
             throw "Cannot find p2p_daemon.exe build output. Searched: $($candidates -join ', ')"
           }
 
-      - name: Package Executables (.zip)
+      - name: Build JavaFX Runtime Image
         run: |
-          $ver = "${{ env.VERSION }}".TrimStart('v')
-          $zipPath = "target\P2PVersionControl-${ver}-windows-x64.zip"
-          New-Item -ItemType Directory -Force -Path target
-          Compress-Archive -Path build\go_coordinator.exe, build\p2p_daemon.exe -DestinationPath $zipPath
+          .\mvnw.cmd clean javafx:jlink
 
-      - name: Build Windows Installer (.msi)
+      - name: Embed Go & C++ in Runtime Image
+        run: |
+          mkdir -p target/app/bin
+          Copy-Item build\go_coordinator.exe target\app\bin\
+          Copy-Item build\p2p_daemon.exe target\app\bin\
+
+      - name: Generate App Image via jpackage
         run: |
           $ver = "${{ env.VERSION }}".TrimStart('v')
           $appName = "P2PVersionControl"
-          New-Item -ItemType Directory -Force -Path target\wix
+          New-Item -ItemType Directory -Force -Path target\bundle
+          jpackage `
+            --type app-image `
+            --name "$appName" `
+            --app-version "$ver" `
+            --runtime-image target\app `
+            --module org.codehaus.mojo.frontendtest/org.codehaus.mojo.frontendtest.HelloApplication `
+            --dest target\bundle `
+            --verbose
 
-          @"
-          <?xml version="1.0" encoding="UTF-8"?>
-          <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
-            <Package Name="$appName" Manufacturer="P2P Sync" Version="$ver" UpgradeCode="12345678-1234-1234-1234-123456789abc">
-              <Media Id="1" Cabinet="app.cab" EmbedCab="yes" />
-              <StandardDirectory Id="ProgramFiles6432Folder">
-                <Directory Id="APPLICATIONFOLDER" Name="$appName">
-                  <Component Id="GoCoordinatorExe" Bitness="always64" Guid="abcdef01-1234-5678-9abc-def012345678">
-                    <File Source="build\go_coordinator.exe" />
-                  </Component>
-                  <Component Id="DaemonExe" Bitness="always64" Guid="abcdef02-1234-5678-9abc-def012345679">
-                    <File Source="build\p2p_daemon.exe" />
-                  </Component>
-                </Directory>
-              </StandardDirectory>
-              <Feature Id="MainFeature" Level="1">
-                <ComponentRef Id="GoCoordinatorExe" />
-                <ComponentRef Id="DaemonExe" />
-              </Feature>
-            </Package>
-          </Wix>
-          "@ | Set-Content -Path "target\wix\installer.wxs"
+      - name: Package Portable App Bundle (.zip)
+        run: |
+          $ver = "${{ env.VERSION }}".TrimStart('v')
+          $appName = "P2PVersionControl"
+          $appDir = Get-ChildItem -Path "target\bundle" -Directory | Select-Object -First 1
+          if ($appDir) {
+            Compress-Archive -Path "$($appDir.FullName)" -DestinationPath "target\${appName}-${ver}-windows-x64.zip"
+          } else {
+            throw "No app image directory found in target/bundle"
+          }
 
-          wix build -out "target\${appName}-${ver}-windows-x64.msi" "target\wix\installer.wxs"
+      - name: Create Windows MSI Installer
+        run: |
+          $ver = "${{ env.VERSION }}".TrimStart('v')
+          $appName = "P2PVersionControl"
+          $appImage = Get-ChildItem -Path "target\bundle" -Directory | Select-Object -First 1 -ExpandProperty FullName
+          jpackage `
+            --type msi `
+            --app-image "$appImage" `
+            --name "$appName" `
+            --app-version "$ver" `
+            --dest target `
+            --verbose
 
       - uses: actions/upload-artifact@v4
         with:
