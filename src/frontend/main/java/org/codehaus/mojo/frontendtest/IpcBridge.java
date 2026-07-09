@@ -20,7 +20,9 @@ import java.util.concurrent.ConcurrentHashMap;
 public class IpcBridge {
     static {
         try {
-            java.io.PrintStream logStream = new java.io.PrintStream(new java.io.FileOutputStream("/tmp/p2p_java.log", true));
+            String tmpDir = System.getProperty("java.io.tmpdir");
+            java.io.File logFile = new java.io.File(tmpDir, "p2p_java.log");
+            java.io.PrintStream logStream = new java.io.PrintStream(new java.io.FileOutputStream(logFile, true));
             System.setOut(logStream);
             System.setErr(logStream);
             System.out.println("\n--- Java Session Started: " + new java.util.Date() + " ---");
@@ -101,7 +103,8 @@ public class IpcBridge {
                 System.out.println("[Java] Development environment detected. Building Go coordinator...");
                 try {
                     new java.io.File(baseDir, "build").mkdirs();
-                    ProcessBuilder pbBuild = new ProcessBuilder("go", "build", "-o", "../../../build/go_coordinator", "main.go");
+                    String outputName = System.getProperty("os.name").toLowerCase().contains("win") ? "go_coordinator.exe" : "go_coordinator";
+                    ProcessBuilder pbBuild = new ProcessBuilder("go", "build", "-o", "../../../build/" + outputName, "main.go");
                     pbBuild.directory(devGoDir);
                     Process buildProc = pbBuild.start();
                     int exitCode = buildProc.waitFor();
@@ -120,15 +123,16 @@ public class IpcBridge {
 
         // 2. Start Go coordinator
         try {
-            java.io.File goExe = new java.io.File(System.getProperty("java.home"), "bin/go_coordinator");
+            String exeSuffix = System.getProperty("os.name").toLowerCase().contains("win") ? ".exe" : "";
+            java.io.File goExe = new java.io.File(System.getProperty("java.home"), "bin/go_coordinator" + exeSuffix);
             if (!goExe.exists()) {
-                goExe = new java.io.File(baseDir, "build/go_coordinator");
+                goExe = new java.io.File(baseDir, "build/go_coordinator" + exeSuffix);
             }
             if (!goExe.exists()) {
-                goExe = new java.io.File(baseDir, "src/backend/go/build/go_coordinator");
+                goExe = new java.io.File(baseDir, "src/backend/go/build/go_coordinator" + exeSuffix);
             }
             if (!goExe.exists()) {
-                goExe = new java.io.File(baseDir, "go_coordinator");
+                goExe = new java.io.File(baseDir, "go_coordinator" + exeSuffix);
             }
 
             if (goExe.exists()) {
@@ -141,7 +145,7 @@ public class IpcBridge {
                 env.put("DB_PATH", resolvedDbPath);
                 
                 // Redirect output to a log file instead of inheriting in headless/App bundle mode
-                java.io.File logFile = new java.io.File("/tmp/p2p_go.log");
+                java.io.File logFile = new java.io.File(System.getProperty("java.io.tmpdir"), "p2p_go.log");
                 pbGo.redirectOutput(ProcessBuilder.Redirect.to(logFile));
                 pbGo.redirectError(ProcessBuilder.Redirect.to(logFile));
                 
@@ -153,7 +157,7 @@ public class IpcBridge {
                     Thread.sleep(500);
                     if (!goProcess.isAlive()) {
                         int exitVal = goProcess.exitValue();
-                        System.err.println("[Java] Go coordinator exited immediately with code " + exitVal + ". Check /tmp/p2p_go.log for details.");
+                        System.err.println("[Java] Go coordinator exited immediately with code " + exitVal + ". Check " + logFile.getAbsolutePath() + " for details.");
                     }
                 } catch (InterruptedException ie) {
                     Thread.currentThread().interrupt();
@@ -168,12 +172,13 @@ public class IpcBridge {
 
     private IpcBridge() {
         // Resolve socket path
-        String socketPath = "/tmp/p2p_sync.sock";
+        String tmpDir = System.getProperty("java.io.tmpdir");
+        String socketPath = new java.io.File(tmpDir, "p2p_sync.sock").getAbsolutePath();
         if (System.getenv("IPC_SOCKET") != null) {
             socketPath = System.getenv("IPC_SOCKET");
         } else {
             // Include username to avoid multi-user permission conflicts on the same machine
-            socketPath = "/tmp/p2p_sync_" + System.getProperty("user.name") + ".sock";
+            socketPath = new java.io.File(tmpDir, "p2p_sync_" + System.getProperty("user.name") + ".sock").getAbsolutePath();
         }
         this.resolvedSocketPath = socketPath;
 
@@ -277,6 +282,19 @@ public class IpcBridge {
         }
     }
 
+    private static int deriveFallbackPort(String socketPath) {
+        if (socketPath == null || socketPath.isEmpty()) {
+            return 9999;
+        }
+        byte[] bytes = socketPath.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        long h = 2166136261L;
+        for (byte b : bytes) {
+            h = (h ^ (b & 0xFF)) * 16777619L;
+            h = h & 0xFFFFFFFFL;
+        }
+        return 10000 + (int) (h % 20000);
+    }
+
     private SocketChannel tryConnect() {
         // 1. Try Unix Domain Socket
         try {
@@ -292,10 +310,11 @@ public class IpcBridge {
 
         // 2. Try TCP fallback
         try {
-            System.out.println("Trying TCP fallback on 127.0.0.1:9999...");
+            int port = deriveFallbackPort(resolvedSocketPath);
+            System.out.println("Trying TCP fallback on 127.0.0.1:" + port + "...");
             SocketChannel channel = SocketChannel.open();
-            channel.connect(new InetSocketAddress("127.0.0.1", 9999));
-            System.out.println("Connected to TCP socket.");
+            channel.connect(new InetSocketAddress("127.0.0.1", port));
+            System.out.println("Connected to TCP socket on port " + port + ".");
             return channel;
         } catch (Exception e) {
             System.err.println("TCP fallback connection failed: " + e.getMessage());
@@ -425,7 +444,10 @@ public class IpcBridge {
         // Clean up stale IPC socket and PID file for next startup
         try {
             java.nio.file.Files.deleteIfExists(java.nio.file.Paths.get(resolvedSocketPath));
-            java.nio.file.Files.deleteIfExists(java.nio.file.Paths.get("/tmp/p2p_sync.pid"));
+            String derivedPidPath = resolvedSocketPath.endsWith(".sock") ? 
+                resolvedSocketPath.substring(0, resolvedSocketPath.length() - 5) + ".pid" : 
+                resolvedSocketPath + ".pid";
+            java.nio.file.Files.deleteIfExists(java.nio.file.Paths.get(derivedPidPath));
         } catch (IOException e) {
             System.err.println("[Java] Warning: Could not clean up temp files: " + e.getMessage());
         }
