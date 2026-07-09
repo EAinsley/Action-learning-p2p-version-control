@@ -149,9 +149,12 @@ jobs:
 
       - name: Embed Go & C++ in Runtime Image
         run: |
-          mkdir -p target/app/bin
-          Copy-Item build\go_coordinator.exe target\app\bin\
-          Copy-Item build\p2p_daemon.exe target\app\bin\
+          $binDir = "target\app\bin"
+          if (-not (Test-Path $binDir)) {
+            New-Item -ItemType Directory -Force -Path $binDir | Out-Null
+          }
+          Copy-Item -Force build\go_coordinator.exe $binDir
+          Copy-Item -Force build\p2p_daemon.exe $binDir
 
       - name: Generate App Image via jpackage
         run: |
