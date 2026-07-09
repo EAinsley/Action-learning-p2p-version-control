@@ -70,11 +70,17 @@ void handle_file_transfer(
         return;
     }
 
+    #ifdef _WIN32
+    DWORD sock_timeout = 30000; // 30 seconds
+    ::setsockopt(sock_fd, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char*>(&sock_timeout), sizeof(sock_timeout));
+    ::setsockopt(sock_fd, SOL_SOCKET, SO_SNDTIMEO, reinterpret_cast<const char*>(&sock_timeout), sizeof(sock_timeout));
+    #else
     struct timeval sock_timeout;
     sock_timeout.tv_sec = 30;
     sock_timeout.tv_usec = 0;
     ::setsockopt(sock_fd, SOL_SOCKET, SO_RCVTIMEO, &sock_timeout, sizeof(sock_timeout));
     ::setsockopt(sock_fd, SOL_SOCKET, SO_SNDTIMEO, &sock_timeout, sizeof(sock_timeout));
+    #endif
 
     if (expected_size <= 0) {
         std::cerr << "[C++ Daemon] Invalid expected_size " << expected_size << "\n";

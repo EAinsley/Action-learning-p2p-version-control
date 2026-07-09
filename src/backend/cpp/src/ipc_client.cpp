@@ -6,60 +6,90 @@
 #include <mutex>
 
 #if defined(_WIN32)
-#include <windows.h>
-#include <sstream>
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#pragma comment(lib, "ws2_32.lib")
 
 class WindowsIpcClient : public IpcClient {
 public:
-    WindowsIpcClient() : pipe_(INVALID_HANDLE_VALUE) {}
+    WindowsIpcClient() : socket_(-1) {}
     ~WindowsIpcClient() override { disconnect(); }
 
-    bool connect(const std::string& pipeName) override {
+    bool connect(const std::string& socketPath) override {
         disconnect();
-        std::wstring wpath(pipeName.begin(), pipeName.end());
-        pipe_ = CreateFileW(
-            wpath.c_str(),
-            GENERIC_READ | GENERIC_WRITE,
-            0, nullptr, OPEN_EXISTING, 0, nullptr);
-        if (pipe_ == INVALID_HANDLE_VALUE) {
-            std::cerr << "[WindowsIpcClient] Failed to connect to pipe\n";
+        
+        WSADATA wsaData;
+        if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
             return false;
         }
-        DWORD mode = PIPE_READMODE_MESSAGE;
-        SetNamedPipeHandleState(pipe_, &mode, nullptr, nullptr);
+
+        socket_ = ::socket(AF_INET, SOCK_STREAM, 0);
+        if (socket_ == INVALID_SOCKET) {
+            WSACleanup();
+            return false;
+        }
+
+        // Derive port from socketPath (FNV-1a hash)
+        unsigned int h = 2166136261;
+        for (char c : socketPath) {
+            h = (h ^ static_cast<unsigned char>(c)) * 16777619;
+        }
+        int port = 10000 + (h % 20000);
+
+        struct sockaddr_in addr;
+        std::memset(&addr, 0, sizeof(addr));
+        addr.sin_family = AF_INET;
+        addr.sin_port = htons(port);
+        ::inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
+
+        if (::connect(socket_, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+            closesocket(socket_);
+            socket_ = -1;
+            WSACleanup();
+            return false;
+        }
         return true;
     }
 
     bool send(const std::string& message) override {
-        if (pipe_ == INVALID_HANDLE_VALUE) return false;
-        DWORD written = 0;
+        if (socket_ == -1) return false;
         uint32_t len = static_cast<uint32_t>(message.size());
-        if (!WriteFile(pipe_, &len, sizeof(len), &written, nullptr)) return false;
-        return WriteFile(pipe_, message.data(), len, &written, nullptr);
+        uint32_t netLen = htonl(len);
+        if (::send(socket_, reinterpret_cast<const char*>(&netLen), sizeof(netLen), 0) < 0) return false;
+        return ::send(socket_, message.data(), len, 0) >= 0;
     }
 
     bool receive(std::string& message) override {
-        if (pipe_ == INVALID_HANDLE_VALUE) return false;
-        uint32_t len = 0;
-        DWORD read = 0;
-        if (!ReadFile(pipe_, &len, sizeof(len), &read, nullptr)) return false;
+        if (socket_ == -1) return false;
+        uint32_t netLen = 0;
+        int received = ::recv(socket_, reinterpret_cast<char*>(&netLen), sizeof(netLen), 0);
+        if (received <= 0) return false;
+        uint32_t len = ntohl(netLen);
         message.resize(len);
-        return ReadFile(pipe_, &message[0], len, &read, nullptr);
+        
+        uint32_t totalRead = 0;
+        while (totalRead < len) {
+            int n = ::recv(socket_, &message[totalRead], len - totalRead, 0);
+            if (n <= 0) return false;
+            totalRead += n;
+        }
+        return true;
     }
 
     void disconnect() override {
-        if (pipe_ != INVALID_HANDLE_VALUE) {
-            CloseHandle(pipe_);
-            pipe_ = INVALID_HANDLE_VALUE;
+        if (socket_ != -1) {
+            closesocket(socket_);
+            socket_ = -1;
+            WSACleanup();
         }
     }
 
     bool isConnected() override {
-        return pipe_ != INVALID_HANDLE_VALUE;
+        return socket_ != -1;
     }
 
 private:
-    HANDLE pipe_;
+    SOCKET socket_;
 };
 
 #else

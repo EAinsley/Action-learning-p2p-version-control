@@ -81,7 +81,7 @@ func TestFileTransferStreaming(t *testing.T) {
 		// Connect client
 		client, err = net.Dial("unix", sockPath)
 		if err != nil {
-			client, err = net.Dial("tcp", "127.0.0.1:9999")
+			client, err = net.Dial("tcp", fmt.Sprintf("127.0.0.1:%d", deriveFallbackPort(sockPath)))
 		}
 		if err == nil {
 			defer client.Close()
@@ -282,7 +282,7 @@ func TestFileTransferUploadStreaming(t *testing.T) {
 	// Connect mock C++ client so message channel functions
 	cConn, err := net.Dial("unix", sockPath)
 	if err != nil {
-		cConn, err = net.Dial("tcp", "127.0.0.1:9999")
+		cConn, err = net.Dial("tcp", fmt.Sprintf("127.0.0.1:%d", deriveFallbackPort(sockPath)))
 	}
 	if err == nil {
 		defer cConn.Close()
@@ -360,7 +360,7 @@ func TestFileTransferUploadSizeMismatch(t *testing.T) {
 	// Connect mock C++ client
 	cConn, err := net.Dial("unix", sockPath)
 	if err != nil {
-		cConn, err = net.Dial("tcp", "127.0.0.1:9999")
+		cConn, err = net.Dial("tcp", fmt.Sprintf("127.0.0.1:%d", deriveFallbackPort(sockPath)))
 	}
 	if err == nil {
 		defer cConn.Close()
@@ -411,4 +411,12 @@ func TestFileTransferUploadSizeMismatch(t *testing.T) {
 	if session.Error == nil {
 		t.Error("expected error, got nil")
 	}
+}
+
+func deriveFallbackPort(socketPath string) int {
+	h := uint32(2166136261)
+	for i := 0; i < len(socketPath); i++ {
+		h = (h ^ uint32(socketPath[i])) * 16777619
+	}
+	return 10000 + int(h % 20000)
 }

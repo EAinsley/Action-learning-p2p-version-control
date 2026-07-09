@@ -208,9 +208,15 @@ int main(int argc, char* argv[]) {
                     size = fs::file_size(abs_path);
                     crypto::sha256_file(abs_path.string(), hash);
                     auto write_time = fs::last_write_time(abs_path);
+                    #ifdef _WIN32
+                    auto sctp = std::chrono::clock_cast<std::chrono::system_clock>(write_time);
+                    modified_time = std::chrono::duration_cast<std::chrono::seconds>(
+                        sctp.time_since_epoch()).count();
+                    #else
                     auto sctp = std::chrono::file_clock::to_sys(write_time);
                     modified_time = std::chrono::duration_cast<std::chrono::seconds>(
                         sctp.time_since_epoch()).count();
+                    #endif
                     auto perms = fs::status(abs_path).permissions();
                     mode = static_cast<uint32_t>(perms);
                 } catch (const std::exception& e) {
