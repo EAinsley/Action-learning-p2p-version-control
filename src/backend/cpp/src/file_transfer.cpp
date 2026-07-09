@@ -7,11 +7,15 @@
 #include <cstring>
 #include <cerrno>
 #include <vector>
+#include <algorithm>
 
 #ifdef _WIN32
+#define NOMINMAX
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #pragma comment(lib, "ws2_32.lib")
+#include <BaseTsd.h>
+typedef SSIZE_T ssize_t;
 #else
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -121,7 +125,7 @@ void handle_file_transfer(
             char buffer[4096];
             long long total_received = 0;
             while (total_received < expected_size) {
-                long long to_read = std::min(4096LL, expected_size - total_received);
+                long long to_read = (std::min)(4096LL, expected_size - total_received);
                 if (to_read <= 0) break;
 
                 ssize_t n = readSocket(sock_fd, buffer, to_read);
@@ -197,7 +201,7 @@ void handle_file_transfer(
             char buffer[4096];
             long long total_sent = 0;
             while (total_sent < expected_size) {
-                long long to_read = std::min(4096LL, expected_size - total_sent);
+                long long to_read = (std::min)(4096LL, expected_size - total_sent);
                 infile.read(buffer, to_read);
                 ssize_t bytes = static_cast<ssize_t>(infile.gcount());
                 if (bytes <= 0) break;
@@ -312,7 +316,7 @@ void handle_chunked_file_upload(
     long long total_sent = start_offset;
 
     while (total_sent < file_size) {
-        long long to_read = std::min(CHUNK_SIZE, file_size - total_sent);
+        long long to_read = (std::min)(CHUNK_SIZE, file_size - total_sent);
         infile.read(buffer.data(), to_read);
         ssize_t bytes_read = infile.gcount();
         if (bytes_read <= 0) break;
