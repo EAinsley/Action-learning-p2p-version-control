@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - master
+      - industry-shipping
+      - industry-*
       - test/**
       - fix/**
       - feature/**
@@ -11,6 +13,7 @@ on:
   pull_request:
     branches:
       - master
+      - industry-shipping
 
 jobs:
   go-test:
