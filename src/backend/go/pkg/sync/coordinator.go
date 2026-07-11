@@ -311,8 +311,10 @@ func (sc *SyncCoordinator) HandleLocalFileChanged(repoID string, payload *protoc
 	// 1. Fetch current database metadata
 	existing, err := sc.db.Metadata().Get(repoID, payload.Path)
 	if err == nil && existing != nil {
-		// Ignore redundant file change notifications that match the recorded db state (e.g. from sync downloads)
-		if existing.Hash == payload.Hash && existing.IsDeleted == (payload.Action == "delete") {
+		// Ignore redundant file change notifications that match the recorded db state (e.g. from sync downloads).
+		// Compare size and mode too — the hash alone is insufficient because a race in the C++ daemon
+		// can produce size=0 with the correct hash (TOCTOU between file_size and sha256).
+		if existing.Hash == payload.Hash && existing.Size == payload.Size && existing.Mode == uint32(payload.Mode) && existing.IsDeleted == (payload.Action == "delete") {
 			log.Printf("[SyncCoordinator] Ignoring redundant file change for: %s (hash matches db)\n", payload.Path)
 			return nil
 		}
@@ -352,30 +354,34 @@ func (sc *SyncCoordinator) HandleLocalFileChanged(repoID string, payload *protoc
 	_ = sc.db.History().LogEvent(&histEvent)
 
 	// 5. Broadcast change to all connected network peers
-	p2pMsg := &ipc.Message{
-		Version:   "1.0",
-		Type:      "file_metadata_update",
-		Source:    "go",
-		Timestamp: time.Now().UnixNano() / int64(time.Millisecond),
-	}
-	updatePayload := map[string]interface{}{
-		"repo_id":       repoID,
-		"path":          payload.Path,
-		"hash":          payload.Hash,
-		"size":          payload.Size,
-		"version":       nextVersion,
-		"modified_time": payload.ModifiedTime,
-		"is_deleted":    payload.Action == "delete",
-		"mode":          payload.Mode,
-		"vector_clock":  sc.vectorClock.AsMap(),
-	}
-	payloadBytes, err := json.Marshal(updatePayload)
-	if err != nil {
-		return fmt.Errorf("marshal metadata update: %w", err)
-	}
-	p2pMsg.Payload = payloadBytes
+	// Skip broadcast for size=0 files (C++ may fire Created event before file is fully written).
+	// A subsequent Modified event with the real size will trigger the actual broadcast.
+	if payload.Size > 0 || payload.Action == "delete" {
+		p2pMsg := &ipc.Message{
+			Version:   "1.0",
+			Type:      "file_metadata_update",
+			Source:    "go",
+			Timestamp: time.Now().UnixNano() / int64(time.Millisecond),
+		}
+		updatePayload := map[string]interface{}{
+			"repo_id":       repoID,
+			"path":          payload.Path,
+			"hash":          payload.Hash,
+			"size":          payload.Size,
+			"version":       nextVersion,
+			"modified_time": payload.ModifiedTime,
+			"is_deleted":    payload.Action == "delete",
+			"mode":          payload.Mode,
+			"vector_clock":  sc.vectorClock.AsMap(),
+		}
+		payloadBytes, err := json.Marshal(updatePayload)
+		if err != nil {
+			return fmt.Errorf("marshal metadata update: %w", err)
+		}
+		p2pMsg.Payload = payloadBytes
 
-	sc.connMgr.Broadcast(p2pMsg)
+		sc.connMgr.Broadcast(p2pMsg)
+	}
 	return nil
 }
 
