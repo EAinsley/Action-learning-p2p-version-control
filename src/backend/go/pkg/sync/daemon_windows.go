@@ -6,6 +6,10 @@ import (
 	"os/exec"
 )
 
+func daemonBinaryName(base string) string {
+	return base + ".exe"
+}
+
 func setProcessGroup(cmd *exec.Cmd) {
 	// No setpgid on Windows. Processes are spawned in a default group or controlled via Job Objects,
 	// but direct cmd.Process.Kill() handles child process teardown robustly.

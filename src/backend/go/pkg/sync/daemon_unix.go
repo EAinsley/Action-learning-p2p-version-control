@@ -7,6 +7,10 @@ import (
 	"syscall"
 )
 
+func daemonBinaryName(base string) string {
+	return base
+}
+
 func setProcessGroup(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 }
