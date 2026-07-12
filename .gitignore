@@ -136,3 +136,8 @@ slides/
 
 # Runtime artifacts
 p2p_sync.db
+
+# Private environment/credentials
+.env
+.env*
+.env.local
