@@ -1,0 +1,6 @@
+{
+  "name": "Axon P2P Dashboard",
+  "description": "A minimalist brutalist peer-to-peer version control dashboard featuring live mesh synchronization, conflict resolution, metrics, and operation logs.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

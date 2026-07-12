@@ -1,0 +1,137 @@
+@import url('https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200');
+
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Hanken Grotesk", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "SFMono-Regular", Menlo, Monaco, Consolas, monospace;
+
+  --color-brand-orange: #ee4900;
+  --color-bone-white: #f9f9f9;
+  --color-deep-charcoal: #1a1a1a;
+  
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #f4f3f3;
+  --color-surface-container: #eeeeee;
+  --color-surface-container-high: #e8e8e8;
+  --color-surface-container-highest: #e2e2e2;
+  
+  --color-inverse-surface: #2f3131;
+}
+
+@layer base {
+  body {
+    background-color: #f9f9f9;
+    color: #1a1a1a;
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* Brutalist details */
+* {
+  border-radius: 0px !important;
+}
+
+.brutalist-border {
+  border: 1px solid #1a1a1a;
+}
+.brutalist-border-b {
+  border-bottom: 1px solid #1a1a1a;
+}
+.brutalist-border-r {
+  border-right: 1px solid #1a1a1a;
+}
+.brutalist-border-t {
+  border-top: 1px solid #1a1a1a;
+}
+.brutalist-border-l {
+  border-left: 1px solid #1a1a1a;
+}
+
+.brutalist-button {
+  background-color: #f9f9f9;
+  color: #1a1a1a;
+  border: 1px solid #1a1a1a;
+  transition: all 0.1s ease-in-out;
+}
+.brutalist-button:hover:not(:disabled) {
+  box-shadow: 4px 4px 0px #1a1a1a;
+  transform: translate(-2px, -2px);
+}
+.brutalist-button:active:not(:disabled) {
+  box-shadow: 0px 0px 0px #1a1a1a;
+  transform: translate(0, 0);
+}
+
+.brutalist-button-primary {
+  background-color: #1a1a1a;
+  color: #f9f9f9;
+  border: 1px solid #1a1a1a;
+  transition: all 0.1s ease-in-out;
+}
+.brutalist-button-primary:hover:not(:disabled) {
+  box-shadow: 4px 4px 0px #ee4900;
+  transform: translate(-2px, -2px);
+}
+.brutalist-button-primary:active:not(:disabled) {
+  box-shadow: 0px 0px 0px #1a1a1a;
+  transform: translate(0, 0);
+}
+
+.brutalist-button-orange {
+  background-color: #ee4900;
+  color: #ffffff;
+  border: 1px solid #1a1a1a;
+  transition: all 0.1s ease-in-out;
+}
+.brutalist-button-orange:hover:not(:disabled) {
+  box-shadow: 4px 4px 0px #1a1a1a;
+  transform: translate(-2px, -2px);
+}
+.brutalist-button-orange:active:not(:disabled) {
+  box-shadow: 0px 0px 0px #1a1a1a;
+  transform: translate(0, 0);
+}
+
+/* Scrollbar rules */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #f9f9f9;
+  border-left: 1px solid #1a1a1a;
+}
+::-webkit-scrollbar-thumb {
+  background: #1a1a1a;
+}
+
+/* Mesh grid background pattern */
+.mesh-grid {
+  background-image: 
+    radial-gradient(#c4c7c7 1px, transparent 1px),
+    radial-gradient(#c4c7c7 1px, transparent 1px);
+  background-size: 40px 40px;
+  background-position: 0 0, 20px 20px;
+  opacity: 0.15;
+}
+
+@keyframes subtlePulse {
+  0% { opacity: 1; border-color: #1a1a1a; }
+  50% { opacity: 0.6; border-color: #ee4900; }
+  100% { opacity: 1; border-color: #1a1a1a; }
+}
+
+.pulse-border {
+  animation: subtlePulse 2s infinite ease-in-out;
+}
+
+@keyframes spin-slow {
+  to { transform: rotate(360deg); }
+}
+.spin-loader {
+  animation: spin-slow 2s linear infinite;
+}

@@ -1,6 +1,8 @@
 module org.codehaus.mojo.frontendtest {
     requires javafx.controls;
     requires javafx.fxml;
+    requires javafx.web;
+    requires jdk.jsobject;
 
     requires org.kordamp.ikonli.core;
     requires org.kordamp.ikonli.javafx;

@@ -2,32 +2,52 @@
 
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
-
 <?import javafx.geometry.Insets?>
-<VBox fx:id="rootContainer" alignment="CENTER" spacing="15.0" xmlns:fx="http://javafx.com/fxml"
+
+<VBox fx:id="rootContainer" spacing="16.0" xmlns:fx="http://javafx.com/fxml"
       fx:controller="org.codehaus.mojo.frontendtest.RepositoryListController"
       styleClass="root">
     <padding>
-        <Insets topRightBottomLeft="20"/>
+        <Insets top="20" right="24" bottom="24" left="24"/>
     </padding>
 
-    <MenuBar fx:id="menuBar">
-        <Menu text="File">
-            <MenuItem text="Preferences..." onAction="#handleSettings"/>
-            <SeparatorMenuItem/>
-            <MenuItem text="Quit" onAction="#handleQuit"/>
-        </Menu>
-    </MenuBar>
+    <!-- Top Editorial Header Bar -->
+    <HBox alignment="CENTER_LEFT" spacing="10" style="-fx-border-color: -theme-border; -fx-border-width: 0 0 1 0; -fx-padding: 0 0 12 0;">
+        <Label text="AXON" style="-fx-font-family: 'Hanken Grotesk', sans-serif; -fx-font-size: 26px; -fx-font-weight: 900; -fx-text-fill: -theme-text-main; -fx-letter-spacing: -0.04em;"/>
+        <Region HBox.hgrow="ALWAYS"/>
+        <Label text="SYSTEM_V.1.0.1" style="-fx-font-family: 'JetBrains Mono', monospace; -fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: -theme-text-muted;"/>
+    </HBox>
 
-    <Label styleClass="title-label" text="P2P Version Control"/>
-    <Label styleClass="section-label" text="Tracked Repositories"/>
-    <ListView fx:id="repoListView" onMouseClicked="#handleRepoClick" maxWidth="Infinity" VBox.vgrow="ALWAYS"/>
+    <!-- Hero Editorial Statistics Section -->
+    <HBox spacing="16" style="-fx-padding: 8 0 16 0;">
+        <!-- Stat Block 1 -->
+        <VBox HBox.hgrow="ALWAYS" style="-fx-border-color: -theme-border; -fx-border-width: 1px; -fx-padding: 12 16; -fx-background-color: -theme-card-bg;">
+            <Label text="03" style="-fx-font-family: 'Hanken Grotesk', sans-serif; -fx-font-size: 38px; -fx-font-weight: 900; -fx-text-fill: -theme-text-main; -fx-letter-spacing: -0.02em;"/>
+            <Label text="ACTIVE REPOSITORIES" styleClass="section-label" style="-fx-font-size: 10px; -fx-padding: 4 0 0 0;"/>
+        </VBox>
+        <!-- Stat Block 2 -->
+        <VBox HBox.hgrow="ALWAYS" style="-fx-border-color: -theme-border; -fx-border-width: 1px; -fx-padding: 12 16; -fx-background-color: -theme-card-bg;">
+            <Label text="ONLINE" style="-fx-font-family: 'Hanken Grotesk', sans-serif; -fx-font-size: 38px; -fx-font-weight: 900; -fx-text-fill: -theme-danger; -fx-letter-spacing: -0.02em;"/>
+            <Label text="NETWORK STATUS" styleClass="section-label" style="-fx-font-size: 10px; -fx-padding: 4 0 0 0;"/>
+        </VBox>
+    </HBox>
 
-    <VBox alignment="CENTER" spacing="10.0">
-        <Button maxWidth="Infinity" onAction="#handleAddRepo">Add / Create Repository</Button>
-        <Button maxWidth="Infinity" onAction="#handleShareRepo">Share Repository</Button>
-        <Button maxWidth="Infinity" onAction="#handleJoinRepo">Join New Repository</Button>
-        <Button maxWidth="Infinity" styleClass="button-danger" onAction="#handleDeleteRepo">Delete / Untrack Repository</Button>
+    <!-- Main Content List -->
+    <VBox VBox.vgrow="ALWAYS" spacing="6.0">
+        <Label styleClass="section-label" text="TRACKED_REPOSITORIES_Pulse"/>
+        <ListView fx:id="repoListView" onMouseClicked="#handleRepoClick" maxWidth="Infinity" VBox.vgrow="ALWAYS"/>
     </VBox>
 
+    <!-- Action Buttons Panel -->
+    <VBox spacing="8.0">
+        <HBox spacing="8.0">
+            <Button HBox.hgrow="ALWAYS" maxWidth="Infinity" onAction="#handleAddRepo">ADD / CREATE REPO</Button>
+            <Button HBox.hgrow="ALWAYS" maxWidth="Infinity" onAction="#handleJoinRepo">JOIN NEW REPO</Button>
+        </HBox>
+        <HBox spacing="8.0">
+            <Button HBox.hgrow="ALWAYS" maxWidth="Infinity" onAction="#handleShareRepo">SHARE REPO</Button>
+            <Button HBox.hgrow="ALWAYS" maxWidth="Infinity" onAction="#handleSettings">PREFERENCES</Button>
+        </HBox>
+        <Button maxWidth="Infinity" styleClass="button-danger" onAction="#handleDeleteRepo">DELETE / UNTRACK REPO</Button>
+    </VBox>
 </VBox>
