@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -43,10 +44,9 @@ func NewFileTransferManager(ipcServer *ipc.IpcServer) *FileTransferManager {
 }
 
 func (ft *FileTransferManager) StartDownload(transferID, filePath, repoID, peerID, expectedHash string, expectedSize int64, peerAddr string, peerPort int, mode uint32) error {
-	addr := net.JoinHostPort(peerAddr, strconv.Itoa(peerPort))
-	netConn, err := net.DialTimeout("tcp", addr, 10*time.Second)
+	netConn, err := dialWithFallback(peerAddr, peerPort, 10*time.Second)
 	if err != nil {
-		return fmt.Errorf("failed to connect to remote peer transfer port %s: %w", addr, err)
+		return fmt.Errorf("failed to connect to remote peer transfer port %s:%d: %w", peerAddr, peerPort, err)
 	}
 
 	localListener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -394,4 +394,44 @@ func (ft *FileTransferManager) GetSessions() []TransferSession {
 		s.mu.Unlock()
 	}
 	return list
+}
+
+func dialWithFallback(address string, port int, timeout time.Duration) (net.Conn, error) {
+	addr := net.JoinHostPort(address, strconv.Itoa(port))
+	conn, err := net.DialTimeout("tcp", addr, timeout)
+	if err == nil {
+		return conn, nil
+	}
+
+	// Check if this is an IPv6 link-local address (starts with "fe80:")
+	ip := net.ParseIP(address)
+	if ip != nil && ip.To4() == nil && strings.HasPrefix(strings.ToLower(address), "fe80:") {
+		// 1. Try common fallback zone interfaces
+		interfaces, intErr := net.Interfaces()
+		if intErr == nil {
+			for _, iface := range interfaces {
+				if (iface.Flags & net.FlagUp) != 0 {
+					zonedAddr := net.JoinHostPort(address+"%"+iface.Name, strconv.Itoa(port))
+					log.NewLogger("FileTransferManager").Warn().Msg("Trying fallback zoned address: "+zonedAddr)
+					c, e := net.DialTimeout("tcp", zonedAddr, 2*time.Second)
+					if e == nil {
+						return c, nil
+					}
+				}
+			}
+		}
+
+		// 2. Also try localhost fallbacks in case the peer is running locally (e.g. in loopback integration tests)
+		localhosts := []string{"127.0.0.1", "::1"}
+		for _, lhost := range localhosts {
+			laddr := net.JoinHostPort(lhost, strconv.Itoa(port))
+			log.NewLogger("FileTransferManager").Warn().Msg("Trying local fallback address: "+laddr)
+			c, e := net.DialTimeout("tcp", laddr, 1*time.Second)
+			if e == nil {
+				return c, nil
+			}
+		}
+	}
+
+	return nil, err
 }
