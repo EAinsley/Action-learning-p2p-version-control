@@ -3,8 +3,10 @@ package sync
 import (
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"os"
@@ -152,7 +154,12 @@ func (sc *SyncCoordinator) startRepoWorkerLocked(repoID string) {
 			return
 		}
 
-		// 2. Find C++ daemon binary
+		// 2. Perform initial directory scan and index existing local files
+		if err := sc.ScanAndIndexLocalFiles(repoID, repo.LocalPath); err != nil {
+			log.Printf("[SyncCoordinator] Warning: Initial directory scan failed for repo %s: %v\n", repoID, err)
+		}
+
+		// 3. Find C++ daemon binary
 		cppExe := "./" + daemonBinaryName("p2p_daemon")
 		if execPath, errExec := os.Executable(); errExec == nil {
 			peerCpp := filepath.Join(filepath.Dir(execPath), daemonBinaryName("p2p_daemon"))
@@ -1118,4 +1125,271 @@ func (sc *SyncCoordinator) SyncAllRepositoriesWithPeer(peerID string) {
 			sc.sendMetadataUpdateToPeer(peerID, repo.ID, f.Filepath, f.Size, uint64(f.Version), f.Hash, f.LocalLastModified, f.IsDeleted, f.Mode)
 		}
 	}
+}
+
+func (sc *SyncCoordinator) ScanAndIndexLocalFiles(repoID, localPath string) error {
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
+
+	scanStartTime := time.Now().UnixMilli()
+
+	log.Printf("[SyncCoordinator] Starting initial directory scan for repository %s at %s\n", repoID, localPath)
+
+	seenFiles := make(map[string]bool)
+
+	err := filepath.WalkDir(localPath, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Skip hidden directories and files (like .git, .DS_Store, etc.)
+		rel, err := filepath.Rel(localPath, path)
+		if err != nil {
+			return err
+		}
+
+		if rel != "." {
+			parts := strings.Split(rel, string(filepath.Separator))
+			for _, part := range parts {
+				if strings.HasPrefix(part, ".") {
+					if d.IsDir() {
+						return filepath.SkipDir
+					}
+					return nil
+				}
+			}
+		}
+
+		if d.IsDir() {
+			return nil
+		}
+
+		// Skip temporary .tmp files
+		if strings.HasSuffix(rel, ".tmp") {
+			return nil
+		}
+
+		info, err := d.Info()
+		if err != nil {
+			return nil
+		}
+
+		size := info.Size()
+		modTime := info.ModTime().UnixMilli()
+		mode := uint32(info.Mode())
+
+		seenFiles[rel] = true
+
+		existing, err := sc.db.Metadata().Get(repoID, rel)
+		if err != nil {
+			log.Printf("[SyncCoordinator] Error getting metadata for %s: %v\n", rel, err)
+			return nil
+		}
+
+		if existing != nil {
+			// Compare size, modified time, and mode to see if it hasn't changed.
+			if existing.Size == size && existing.LocalLastModified == modTime && existing.Mode == mode && !existing.IsDeleted {
+				// No change, skip hash computation
+				return nil
+			}
+
+			// Compute hash to see if content actually changed
+			hash, err := sc.computeFileSHA256(path)
+			if err != nil {
+				log.Printf("[SyncCoordinator] Error hashing file %s: %v\n", path, err)
+				return nil
+			}
+
+			if existing.Hash == hash && existing.Size == size && existing.Mode == mode && !existing.IsDeleted {
+				// Only modification time changed, but contents are identical. Update mod time only.
+				existing.LocalLastModified = modTime
+				if err := sc.db.Metadata().Save(existing); err != nil {
+					log.Printf("[SyncCoordinator] Error saving updated metadata for %s: %v\n", rel, err)
+				}
+				return nil
+			}
+
+			// Actual modification offline while app was closed!
+			nextVersion := sc.lamportClock.Tick()
+			sc.vectorClock.Tick(sc.localPeerID)
+
+			meta := sqlite.FileMetadata{
+				RepositoryID:      repoID,
+				Filepath:          rel,
+				Hash:              hash,
+				Size:              size,
+				Version:           int64(nextVersion),
+				LocalLastModified: modTime,
+				IsDeleted:         false,
+				UpdatedAt:         time.Now().UnixMilli(),
+				Mode:              mode,
+			}
+
+			if err := sc.db.Metadata().Save(&meta); err != nil {
+				log.Printf("[SyncCoordinator] Error saving modified metadata for %s: %v\n", rel, err)
+				return nil
+			}
+
+			// Log to sync history
+			histEvent := sqlite.SyncEvent{
+				EventID:      fmt.Sprintf("evt_%d_%s", time.Now().UnixNano(), repoID),
+				RepositoryID: repoID,
+				FilePath:     rel,
+				PeerID:       sc.localPeerID,
+				Timestamp:    time.Now().Unix(),
+				EventType:    "local_change",
+				Status:       "success",
+			}
+			_ = sc.db.History().LogEvent(&histEvent)
+
+			// Broadcast change to other peers
+			if size > 0 {
+				go sc.broadcastLocalMetadataUpdate(repoID, rel, &meta)
+			}
+		} else {
+			// New file discovered offline!
+			hash, err := sc.computeFileSHA256(path)
+			if err != nil {
+				log.Printf("[SyncCoordinator] Error hashing new file %s: %v\n", path, err)
+				return nil
+			}
+
+			nextVersion := sc.lamportClock.Tick()
+			sc.vectorClock.Tick(sc.localPeerID)
+
+			meta := sqlite.FileMetadata{
+				RepositoryID:      repoID,
+				Filepath:          rel,
+				Hash:              hash,
+				Size:              size,
+				Version:           int64(nextVersion),
+				LocalLastModified: modTime,
+				IsDeleted:         false,
+				UpdatedAt:         time.Now().UnixMilli(),
+				Mode:              mode,
+			}
+
+			if err := sc.db.Metadata().Save(&meta); err != nil {
+				log.Printf("[SyncCoordinator] Error saving new metadata for %s: %v\n", rel, err)
+				return nil
+			}
+
+			// Log to sync history
+			histEvent := sqlite.SyncEvent{
+				EventID:      fmt.Sprintf("evt_%d_%s", time.Now().UnixNano(), repoID),
+				RepositoryID: repoID,
+				FilePath:     rel,
+				PeerID:       sc.localPeerID,
+				Timestamp:    time.Now().Unix(),
+				EventType:    "local_change",
+				Status:       "success",
+			}
+			_ = sc.db.History().LogEvent(&histEvent)
+
+			// Broadcast change to other peers
+			if size > 0 {
+				go sc.broadcastLocalMetadataUpdate(repoID, rel, &meta)
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("directory walk failed: %w", err)
+	}
+
+	// Now check for any files in the DB that were deleted offline
+	dbFiles, err := sc.db.Metadata().ListByRepository(repoID, false)
+	if err != nil {
+		return fmt.Errorf("list db files failed: %w", err)
+	}
+
+	for _, dbFile := range dbFiles {
+		if dbFile.UpdatedAt >= scanStartTime {
+			// Skip files that were created or modified during/after the scan started
+			continue
+		}
+		if !seenFiles[dbFile.Filepath] && !dbFile.IsDeleted {
+			// This file was deleted offline!
+			nextVersion := sc.lamportClock.Tick()
+			sc.vectorClock.Tick(sc.localPeerID)
+
+			dbFile.IsDeleted = true
+			dbFile.Version = int64(nextVersion)
+			dbFile.UpdatedAt = time.Now().UnixMilli()
+
+			if err := sc.db.Metadata().Save(dbFile); err != nil {
+				log.Printf("[SyncCoordinator] Error saving deletion metadata for %s: %v\n", dbFile.Filepath, err)
+				continue
+			}
+
+			// Log to sync history
+			histEvent := sqlite.SyncEvent{
+				EventID:      fmt.Sprintf("evt_%d_%s", time.Now().UnixNano(), repoID),
+				RepositoryID: repoID,
+				FilePath:     dbFile.Filepath,
+				PeerID:       sc.localPeerID,
+				Timestamp:    time.Now().Unix(),
+				EventType:    "local_change",
+				Status:       "success",
+			}
+			_ = sc.db.History().LogEvent(&histEvent)
+
+			// Broadcast deletion update
+			go sc.broadcastLocalMetadataUpdate(repoID, dbFile.Filepath, dbFile)
+		}
+	}
+
+	log.Printf("[SyncCoordinator] Completed initial directory scan for repository %s. Total files tracked: %d\n", repoID, len(seenFiles))
+	return nil
+}
+
+func (sc *SyncCoordinator) computeFileSHA256(filePath string) (string, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	h := sha256.New()
+	var buf = make([]byte, 64*1024)
+	if _, err := io.CopyBuffer(h, file, buf); err != nil {
+		return "", err
+	}
+
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+func (sc *SyncCoordinator) broadcastLocalMetadataUpdate(repoID string, filepath string, meta *sqlite.FileMetadata) {
+	p2pMsg := &ipc.Message{
+		Version:   "1.0",
+		Type:      "file_metadata_update",
+		Source:    "go",
+		Timestamp: time.Now().UnixNano() / int64(time.Millisecond),
+	}
+	
+	sc.mu.RLock()
+	vclock := sc.vectorClock.AsMap()
+	sc.mu.RUnlock()
+
+	updatePayload := map[string]interface{}{
+		"repo_id":       repoID,
+		"path":          filepath,
+		"hash":          meta.Hash,
+		"size":          meta.Size,
+		"version":       meta.Version,
+		"modified_time": meta.LocalLastModified,
+		"is_deleted":    meta.IsDeleted,
+		"mode":          meta.Mode,
+		"vector_clock":  vclock,
+	}
+	payloadBytes, err := json.Marshal(updatePayload)
+	if err != nil {
+		log.Printf("[SyncCoordinator] Error marshalling scan metadata update: %v\n", err)
+		return
+	}
+	p2pMsg.Payload = payloadBytes
+
+	sc.connMgr.Broadcast(p2pMsg)
 }

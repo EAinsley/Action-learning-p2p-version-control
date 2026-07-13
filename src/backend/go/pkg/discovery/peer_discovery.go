@@ -81,17 +81,37 @@ func (pr *PeerRegistry) browsePeers(ctx context.Context) {
 		return
 	}
 
-	entries := make(chan *zeroconf.ServiceEntry)
-	go func(results <-chan *zeroconf.ServiceEntry) {
-		for entry := range results {
-			pr.handlePeerDiscovered(entry)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
 		}
-	}(entries)
 
-	// Browse until context is cancelled (zeroconf will close entries when ctx is done)
-	err = resolver.Browse(ctx, "_p2psync._tcp", "local.", entries)
-	if err != nil && err != context.Canceled {
-		log.Printf("Browse failed: %v", err)
+		// Create a sub-context for this active browse query session (runs for 10 seconds)
+		browseCtx, browseCancel := context.WithTimeout(ctx, 10*time.Second)
+
+		entries := make(chan *zeroconf.ServiceEntry)
+		go func(results <-chan *zeroconf.ServiceEntry) {
+			for entry := range results {
+				pr.handlePeerDiscovered(entry)
+			}
+		}(entries)
+
+		log.Println("[PeerRegistry] Triggering active mDNS browse query...")
+		err = resolver.Browse(browseCtx, "_p2psync._tcp", "local.", entries)
+		if err != nil && err != context.Canceled && err != context.DeadlineExceeded {
+			log.Printf("Browse query error: %v", err)
+		}
+
+		browseCancel()
+
+		// Wait 5 seconds before triggering the next active query to avoid flooding the network
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(5 * time.Second):
+		}
 	}
 }
 
@@ -127,22 +147,30 @@ func (pr *PeerRegistry) handlePeerDiscovered(entry *zeroconf.ServiceEntry) {
 }
 
 func (pr *PeerRegistry) AddManualPeer(id, address string, port int) {
-	peer := &Peer{
-		ID:       id,
-		Name:     id,
-		Address:  address,
-		Port:     port,
-		LastSeen: time.Now(),
-	}
 	pr.mu.Lock()
-	if _, exists := pr.peers[peer.ID]; !exists {
-		pr.peers[peer.ID] = peer
-		if pr.OnPeerDiscovered != nil {
-			go pr.OnPeerDiscovered(peer)
+	peer, exists := pr.peers[id]
+	if !exists {
+		peer = &Peer{
+			ID:       id,
+			Name:     id,
+			Address:  address,
+			Port:     port,
+			LastSeen: time.Now(),
 		}
+		pr.peers[id] = peer
 		log.Printf("Manual peer added: %s (%s:%d)\n", peer.Name, peer.Address, peer.Port)
+	} else {
+		peer.Address = address
+		peer.Port = port
+		peer.LastSeen = time.Now()
+		log.Printf("Manual peer details updated: %s (%s:%d)\n", peer.Name, peer.Address, peer.Port)
 	}
 	pr.mu.Unlock()
+
+	// Always trigger OnPeerDiscovered to attempt dialing since the user explicitly requested it
+	if pr.OnPeerDiscovered != nil {
+		go pr.OnPeerDiscovered(peer)
+	}
 }
 
 func (pr *PeerRegistry) GetPeers() []*Peer {
