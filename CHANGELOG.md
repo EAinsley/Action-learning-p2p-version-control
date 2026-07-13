@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-07-13
+
+### Added
+- Real end-to-end integration assertions replacing prior no-op scaffolds: conflict detection (via the SQLite `sync_history` table), network-partition heal, and coordinator crash recovery; plus a dedicated mDNS auto-discovery test. Deterministic peer wiring keeps the suite stable under CI load.
+- CI hardening: Go tests run with the race detector + coverage, `go vet`, and bounded fuzz smoke; C++ unit tests are now actually built in CI (`-DBUILD_TESTS=ON`) with an added AddressSanitizer/UBSan job; Java tests now run in CI (previously compile-only).
+- Release signing pipeline: conditional macOS code-signing + notarization + stapling, Windows Authenticode MSI signing, and `SHA256SUMS` with an optional GPG signature; unsigned-but-checksummed artifacts are produced when signing secrets are absent. See `docs/deploy/releasing.md`.
+- `LICENSE` (MIT) and `CODE_OF_CONDUCT.md` (Contributor Covenant).
+- `P2P_DISABLE_MDNS` environment flag for deterministic, manually-wired peer topologies.
+
+### Changed
+- Rebranded the desktop app from the Maven-archetype leftover `org.codehaus.mojo.frontendtest` to `io.p2pvcs.app` (entry class `P2PApplication`, Maven coordinates `io.p2pvcs:p2p-version-control`).
+
+### Fixed
+- Data race on `ConnectionManager` callbacks (`OnConnected`/`OnDisconnected`/`OnMessage`) behind the flaky `TestAutoReconnect`; callback access is now synchronized and the full Go suite passes under `-race`.
+- `ReadMessage` accepted IPC messages with an empty `type` (found by fuzzing); such messages are now rejected, with a committed regression corpus.
+- Removed a `go vet` lock-copy warning (`TransferSession` copied by value in a stress test).
+
 ## [1.0.1] - 2026-07-07
 
 ### Added
