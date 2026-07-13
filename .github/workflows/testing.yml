@@ -10,10 +10,14 @@ on:
       - fix/**
       - feature/**
       - audit/**
+      - ws/**
+      - ci/**
+      - refactor/**
   pull_request:
     branches:
       - master
       - industry-shipping
+      - ws/**
 
 jobs:
   go-test:
