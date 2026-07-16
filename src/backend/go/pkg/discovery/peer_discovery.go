@@ -101,13 +101,6 @@ func (pr *PeerRegistry) browsePeers(ctx context.Context) {
 		return
 	}
 
-	entries := make(chan *zeroconf.ServiceEntry, 64)
-	go func(results <-chan *zeroconf.ServiceEntry) {
-		for entry := range results {
-			pr.handlePeerDiscovered(entry)
-		}
-	}(entries)
-
 	for {
 		select {
 		case <-ctx.Done():
@@ -116,12 +109,29 @@ func (pr *PeerRegistry) browsePeers(ctx context.Context) {
 		default:
 		}
 
+		// Use a fresh entries channel for every Browse call: zeroconf closes
+		// this channel when the browse context expires, so reusing it across
+		// iterations would cause a "close of closed channel" panic.
+		entries := make(chan *zeroconf.ServiceEntry, 64)
+		var handlerWg sync.WaitGroup
+		handlerWg.Add(1)
+		go func(results <-chan *zeroconf.ServiceEntry) {
+			defer handlerWg.Done()
+			for entry := range results {
+				pr.handlePeerDiscovered(entry)
+			}
+		}(entries)
+
 		browseCtx, browseCancel := context.WithTimeout(ctx, browseTimeout)
 		err := resolver.Browse(browseCtx, "_p2psync._tcp", "local.", entries)
 		browseCancel()
 		if err != nil && err != context.Canceled {
 			log.Printf("Browse failed: %v", err)
 		}
+
+		// Wait for the browse goroutine to finish closing the entries channel
+		// before starting the next iteration.
+		handlerWg.Wait()
 
 		pr.retryPendingEntries(resolver)
 
