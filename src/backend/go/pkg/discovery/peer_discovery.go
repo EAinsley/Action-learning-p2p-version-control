@@ -13,10 +13,11 @@ import (
 )
 
 const (
-	// Active browse polling intervals
-	browseTimeout = 8 * time.Second
-	browseWait    = 3 * time.Second
-	pendingTTL    = 30 * time.Second
+	// Long-lived mDNS browse context; no per-iteration timeout because the
+	// zeroconf resolver shares UDP connections across Browse calls and closes
+	// them when any browse context is cancelled.
+	pendingTTL      = 30 * time.Second
+	pendingRetryInt = 5 * time.Second
 )
 
 type Peer struct {
@@ -41,9 +42,8 @@ type PeerRegistry struct {
 	browseWg     sync.WaitGroup
 
 	// Pending entries that arrived without resolved IPs
-	pending    map[string]*pendingEntry
-	pendingMu  sync.Mutex
-	refreshSig chan struct{}
+	pending   map[string]*pendingEntry
+	pendingMu sync.Mutex
 }
 
 type pendingEntry struct {
@@ -54,9 +54,8 @@ type pendingEntry struct {
 
 func NewPeerRegistry() *PeerRegistry {
 	return &PeerRegistry{
-		peers:      make(map[string]*Peer),
-		pending:    make(map[string]*pendingEntry),
-		refreshSig: make(chan struct{}, 1),
+		peers:   make(map[string]*Peer),
+		pending: make(map[string]*pendingEntry),
 	}
 }
 
@@ -77,8 +76,10 @@ func (pr *PeerRegistry) StartDiscovery(localPeerID string, port int) (*zeroconf.
 
 	ctx, cancel := context.WithCancel(context.Background())
 	pr.cancelBrowse = cancel
-	pr.browseWg.Add(1)
+
+	pr.browseWg.Add(2)
 	go pr.browsePeers(ctx)
+	go pr.pendingRetryLoop(ctx)
 
 	return server, nil
 }
@@ -101,49 +102,38 @@ func (pr *PeerRegistry) browsePeers(ctx context.Context) {
 		return
 	}
 
+	// Keep a single long-lived browse. Cancelling/restarting Browse on the
+	// same resolver closes the shared UDP multicast sockets, so the resolver
+	// must not be reused after a browse finishes.
+	entries := make(chan *zeroconf.ServiceEntry, 64)
+	go func(results <-chan *zeroconf.ServiceEntry) {
+		for entry := range results {
+			pr.handlePeerDiscovered(entry)
+		}
+	}(entries)
+
+	if err := resolver.Browse(ctx, "_p2psync._tcp", "local.", entries); err != nil && err != context.Canceled {
+		log.Printf("Browse failed: %v", err)
+	}
+}
+
+func (pr *PeerRegistry) pendingRetryLoop(ctx context.Context) {
+	defer pr.browseWg.Done()
+
+	ticker := time.NewTicker(pendingRetryInt)
+	defer ticker.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-pr.refreshSig:
-		default:
-		}
-
-		// Use a fresh entries channel for every Browse call: zeroconf closes
-		// this channel when the browse context expires, so reusing it across
-		// iterations would cause a "close of closed channel" panic.
-		entries := make(chan *zeroconf.ServiceEntry, 64)
-		var handlerWg sync.WaitGroup
-		handlerWg.Add(1)
-		go func(results <-chan *zeroconf.ServiceEntry) {
-			defer handlerWg.Done()
-			for entry := range results {
-				pr.handlePeerDiscovered(entry)
-			}
-		}(entries)
-
-		browseCtx, browseCancel := context.WithTimeout(ctx, browseTimeout)
-		err := resolver.Browse(browseCtx, "_p2psync._tcp", "local.", entries)
-		browseCancel()
-		if err != nil && err != context.Canceled {
-			log.Printf("Browse failed: %v", err)
-		}
-
-		// Wait for the browse goroutine to finish closing the entries channel
-		// before starting the next iteration.
-		handlerWg.Wait()
-
-		pr.retryPendingEntries(resolver)
-
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(browseWait):
+		case <-ticker.C:
+			pr.retryPendingEntries()
 		}
 	}
 }
 
-func (pr *PeerRegistry) retryPendingEntries(resolver *zeroconf.Resolver) {
+func (pr *PeerRegistry) retryPendingEntries() {
 	pr.pendingMu.Lock()
 	if len(pr.pending) == 0 {
 		pr.pendingMu.Unlock()
@@ -249,12 +239,30 @@ func (pr *PeerRegistry) resolveAndAdd(entry *zeroconf.ServiceEntry) {
 	log.Printf("Peer discovered: %s (%s:%d)\n", peer.Name, peer.Address, peer.Port)
 }
 
-// RequestRefresh signals the browse loop to perform a fresh mDNS sweep.
+// RequestRefresh performs a one-shot mDNS browse using a temporary resolver.
+// The long-lived browse already keeps the shared resolver listening; this
+// sweep just gives newly-appeared peers an extra nudge.
 func (pr *PeerRegistry) RequestRefresh() {
-	select {
-	case pr.refreshSig <- struct{}{}:
-	default:
+	resolver, err := zeroconf.NewResolver(nil)
+	if err != nil {
+		log.Printf("Refresh: failed to create mDNS resolver: %v", err)
+		return
 	}
+
+	entries := make(chan *zeroconf.ServiceEntry, 16)
+	go func(results <-chan *zeroconf.ServiceEntry) {
+		for entry := range results {
+			pr.handlePeerDiscovered(entry)
+		}
+	}(entries)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	if err := resolver.Browse(ctx, "_p2psync._tcp", "local.", entries); err != nil && err != context.Canceled {
+		log.Printf("Refresh: browse failed: %v", err)
+	}
+	<-ctx.Done()
 }
 
 func (pr *PeerRegistry) AddManualPeer(id, address string, port int) {
