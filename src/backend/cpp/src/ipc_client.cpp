@@ -3,7 +3,26 @@
 #include <iostream>
 #include <cstring>
 #include <cerrno>
+#include <cstdlib>
 #include <mutex>
+
+namespace {
+// If IPC_TCP_PORT is set, both Windows and Unix clients connect to
+// 127.0.0.1:<port> instead of using the socket path. This enables
+// Windows native E2E tests and containerized orchestrators.
+int getIpcTcpPort() {
+    const char* env = std::getenv("IPC_TCP_PORT");
+    if (env && *env) {
+        try {
+            int port = std::stoi(env);
+            if (port > 0 && port <= 65535) return port;
+        } catch (...) {
+            std::cerr << "[IPC] Ignoring invalid IPC_TCP_PORT: " << env << "\n";
+        }
+    }
+    return -1;
+}
+}  // namespace
 
 #if defined(_WIN32)
 #include <winsock2.h>
@@ -29,12 +48,15 @@ public:
             return false;
         }
 
-        // Derive port from socketPath (FNV-1a hash)
-        unsigned int h = 2166136261;
-        for (char c : socketPath) {
-            h = (h ^ static_cast<unsigned char>(c)) * 16777619;
+        int port = getIpcTcpPort();
+        if (port < 0) {
+            // Derive port from socketPath (FNV-1a hash) for legacy mode
+            unsigned int h = 2166136261;
+            for (char c : socketPath) {
+                h = (h ^ static_cast<unsigned char>(c)) * 16777619;
+            }
+            port = 10000 + (h % 20000);
         }
-        int port = 10000 + (h % 20000);
 
         struct sockaddr_in addr;
         std::memset(&addr, 0, sizeof(addr));
@@ -120,6 +142,27 @@ public:
 
     bool connect(const std::string& path) override {
         disconnect();
+
+        int tcpPort = getIpcTcpPort();
+        if (tcpPort > 0) {
+            // TCP mode: connect to 127.0.0.1:<IPC_TCP_PORT>
+            socketFd_ = ::socket(AF_INET, SOCK_STREAM, 0);
+            if (socketFd_ < 0) return false;
+
+            struct sockaddr_in addr;
+            std::memset(&addr, 0, sizeof(addr));
+            addr.sin_family = AF_INET;
+            addr.sin_port = htons(tcpPort);
+            ::inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
+
+            if (::connect(socketFd_, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+                ::close(socketFd_);
+                socketFd_ = -1;
+                return false;
+            }
+            return true;
+        }
+
         socketFd_ = ::socket(AF_UNIX, SOCK_STREAM, 0);
         if (socketFd_ < 0) return false;
 

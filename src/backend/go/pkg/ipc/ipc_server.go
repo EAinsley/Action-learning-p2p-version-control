@@ -58,29 +58,41 @@ func (s *IpcServer) Start() error {
 	var listener net.Listener
 	var err error
 
-	// Remove existing socket file if it exists
-	os.Remove(s.socketPath)
-
-	// Try Unix socket first (Linux/macOS)
-	listener, err = net.Listen("unix", s.socketPath)
-	if err != nil {
-		// Fallback to TCP on Windows or if Unix socket fails
-		fmt.Println("Unix socket not available, falling back to TCP")
-		port := deriveFallbackPort(s.socketPath)
-		listener, err = net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
+	// Explicit TCP mode for cross-platform / containerized tests.
+	// IPC_TCP_PORT takes precedence and listens on all interfaces so peers
+	// inside containers or on Windows can reach the coordinator.
+	if tcpPort := os.Getenv("IPC_TCP_PORT"); tcpPort != "" {
+		addr := fmt.Sprintf("0.0.0.0:%s", tcpPort)
+		listener, err = net.Listen("tcp", addr)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to listen on TCP %s: %w", addr, err)
+		}
+		fmt.Printf("IPC server listening on TCP: %s\n", addr)
+	} else {
+		// Remove existing socket file if it exists
+		os.Remove(s.socketPath)
+
+		// Try Unix socket first (Linux/macOS)
+		listener, err = net.Listen("unix", s.socketPath)
+		if err != nil {
+			// Fallback to TCP on Windows or if Unix socket fails
+			fmt.Println("Unix socket not available, falling back to TCP")
+			port := deriveFallbackPort(s.socketPath)
+			listener, err = net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
+			if err != nil {
+				return err
+			}
+		}
+		fmt.Printf("IPC server listening on: %s\n", s.socketPath)
+
+		// Set Unix socket permissions if applicable
+		if _, ok := listener.(*net.UnixListener); ok {
+			os.Chmod(s.socketPath, 0600)
+			fmt.Println("Unix socket permissions set to 0600")
 		}
 	}
 
 	s.listener = listener
-	fmt.Printf("IPC server listening on: %s\n", s.socketPath)
-
-	// Set Unix socket permissions if applicable
-	if _, ok := listener.(*net.UnixListener); ok {
-		os.Chmod(s.socketPath, 0600)
-		fmt.Println("Unix socket permissions set to 0600")
-	}
 
 	// Accept connections in a goroutine
 	go s.acceptConnections()

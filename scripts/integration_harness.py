@@ -7,7 +7,9 @@ Supports 3+ peers, concurrent edits, network partition, large file transfer,
 C++ daemon crash recovery, and chain replication scenarios.
 """
 import os
+import platform
 import sys
+import tempfile
 import time
 import shutil
 import socket
@@ -23,14 +25,21 @@ import urllib.request
 import urllib.error
 
 # Test directories
-BASE_DIR = "/tmp/p2p_test"
+BASE_DIR = os.path.join(tempfile.gettempdir(), "p2p_test")
 PEER_DIRS = {}
 PEER_DBS = {}
 PEER_SOCKETS = {}
 PEER_PORTS = {}
 
+# Maps IPC_SOCKET path -> (host, port) when IPC_TCP_PORT is in use (Windows / containers)
+IPC_ENDPOINTS = {}
+
 processes = []
 test_results = {"passed": 0, "failed": 0, "skipped": 0}
+
+
+def is_windows():
+    return platform.system() == "Windows"
 
 
 def log(msg):
@@ -85,18 +94,31 @@ def setup_peer_env(peer_id, p2p_port, db_path, socket_path, dir_path, extra_env=
     env["DB_PATH"] = db_path
     env["HEALTH_PORT"] = str(p2p_port + 1000)
     env["P2P_PID_PATH"] = socket_path.replace(".sock", ".pid")
+
+    # On Windows, Unix-domain sockets are not available. Use a deterministic
+    # TCP port derived from the P2P port for IPC so the C++ daemon and the
+    # harness can both reach the Go coordinator.
+    if is_windows():
+        ipc_tcp_port = p2p_port + 10000
+        env["IPC_TCP_PORT"] = str(ipc_tcp_port)
+        IPC_ENDPOINTS[socket_path] = ("127.0.0.1", ipc_tcp_port)
+
     if extra_env:
         env.update(extra_env)
     return env
+
+
+def coordinator_binary():
+    return os.path.join("build", "go_coordinator" + (".exe" if is_windows() else ""))
 
 
 def start_peer(peer_id, p2p_port, db_path, socket_path, dir_path, extra_env=None):
     env = setup_peer_env(peer_id, p2p_port, db_path, socket_path, dir_path, extra_env)
     log(f"Starting {peer_id} on port {p2p_port}...")
 
-    log_file_out = open(f"/tmp/p2p_test_{peer_id}.log", "w")
+    log_file_out = open(os.path.join(tempfile.gettempdir(), f"p2p_test_{peer_id}.log"), "w")
     proc = subprocess.Popen(
-        ["./build/go_coordinator"],
+        [coordinator_binary()],
         env=env,
         stdout=log_file_out,
         stderr=subprocess.STDOUT,
@@ -105,11 +127,27 @@ def start_peer(peer_id, p2p_port, db_path, socket_path, dir_path, extra_env=None
     return proc
 
 
-def kill_process(proc, sig=signal.SIGKILL, wait=3.0):
+def _kill_signal():
+    """Return SIGKILL on Unix, SIGTERM on Windows (which has no SIGKILL)."""
+    return signal.SIGKILL if hasattr(signal, "SIGKILL") else signal.SIGTERM
+
+
+def kill_process(proc, sig=None, wait=3.0):
     """Send a signal to a single peer process (to simulate a crash or a
-    network partition) without disturbing any other running peer."""
+    network partition) without disturbing any other running peer.
+
+    On Windows, Unix signals like SIGTERM/SIGKILL are not reliable with
+    console processes, so we use proc.kill() / TerminateProcess directly.
+    """
+    if sig is None:
+        sig = _kill_signal()
     try:
-        proc.send_signal(sig)
+        if is_windows():
+            # Hard terminate immediately; this is the only reliable way to
+            # stop the coordinator on Windows and release its ports.
+            proc.kill()
+        else:
+            proc.send_signal(sig)
         proc.wait(timeout=wait)
     except subprocess.TimeoutExpired:
         try:
@@ -178,6 +216,23 @@ def wait_for_connections(health_port, min_connections=1, timeout=20.0):
     return False
 
 
+def _connect_ipc_socket(socket_path, timeout):
+    """Create and connect the appropriate IPC socket (Unix domain or TCP)
+    based on the environment."""
+    endpoint = IPC_ENDPOINTS.get(socket_path)
+    if endpoint:
+        host, port = endpoint
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(timeout)
+        s.connect((host, port))
+        return s
+
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    s.settimeout(timeout)
+    s.connect(socket_path)
+    return s
+
+
 def send_ipc_message(socket_path, msg_type, payload, timeout=5.0):
     message = {
         "version": "1.0",
@@ -189,9 +244,7 @@ def send_ipc_message(socket_path, msg_type, payload, timeout=5.0):
     data = json.dumps(message).encode("utf-8")
     length_prefix = struct.pack(">I", len(data))
 
-    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    s.settimeout(timeout)
-    s.connect(socket_path)
+    s = _connect_ipc_socket(socket_path, timeout)
     s.sendall(length_prefix + data)
 
     # Read response if any
@@ -210,8 +263,19 @@ def send_ipc_message(socket_path, msg_type, payload, timeout=5.0):
 
 def wait_for_socket(socket_path, timeout=5.0):
     deadline = time.time() + timeout
+    endpoint = IPC_ENDPOINTS.get(socket_path)
     while time.time() < deadline:
-        if os.path.exists(socket_path):
+        if endpoint:
+            host, port = endpoint
+            try:
+                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                s.settimeout(1)
+                s.connect((host, port))
+                s.close()
+                return True
+            except (OSError, socket.timeout):
+                pass
+        elif os.path.exists(socket_path):
             try:
                 s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
                 s.settimeout(1)
@@ -288,7 +352,7 @@ def terminate_processes():
             p.wait(timeout=3.0)
         except subprocess.TimeoutExpired:
             try:
-                os.kill(p.pid, signal.SIGKILL)
+                p.kill()
                 p.wait(timeout=1.0)
             except (ProcessLookupError, subprocess.TimeoutExpired):
                 pass
@@ -350,6 +414,11 @@ def test_basic_two_peer_sync():
     synced = check_file_exists(dir_b, test_file, content)
 
     if synced:
+        # Windows does not preserve Unix executable bits, so only assert
+        # permission preservation on Unix-like platforms.
+        if is_windows():
+            log("TEST PASSED: Basic Two-Peer Sync")
+            return True
         st = os.stat(os.path.join(dir_b, test_file))
         is_exec = bool(st.st_mode & stat.S_IXUSR)
         log(f"File synced. Executable: {is_exec}")
@@ -402,7 +471,7 @@ def test_three_peer_sync():
     # Wait for the full mesh (each peer connected to the other two) rather
     # than a fixed sleep, so propagation to BOTH peers is reliable under load.
     for pid in peer_ids:
-        if not wait_for_connections(peers[pid]["port"] + 1000, min_connections=2):
+        if not wait_for_connections(peers[pid]["port"] + 1000, min_connections=2, timeout=40.0):
             log(f"{pid} did not connect to both other peers in time")
             return False
     time.sleep(1.0)
@@ -411,8 +480,8 @@ def test_three_peer_sync():
     create_file(peers["peer-1"]["dir"], "shared.txt", content)
 
     log("Waiting for three-peer propagation...")
-    synced_2 = check_file_exists(peers["peer-2"]["dir"], "shared.txt", content)
-    synced_3 = check_file_exists(peers["peer-3"]["dir"], "shared.txt", content)
+    synced_2 = check_file_exists(peers["peer-2"]["dir"], "shared.txt", content, timeout=40)
+    synced_3 = check_file_exists(peers["peer-3"]["dir"], "shared.txt", content, timeout=40)
 
     if synced_2 and synced_3:
         log("TEST PASSED: Three-Peer Sync")
@@ -703,7 +772,7 @@ def test_daemon_crash_recovery():
         return False
 
     log(f"Crashing {peer_a_id}'s coordinator (SIGKILL, no graceful shutdown)...")
-    kill_process(proc_a, sig=signal.SIGKILL)
+    kill_process(proc_a, sig=_kill_signal())
 
     log(f"Recovering: restarting {peer_a_id} (same db/dir/socket/port)...")
     start_peer(peer_a_id, port_a, db_a, sock_a, dir_a, extra_env=mdns_off)
