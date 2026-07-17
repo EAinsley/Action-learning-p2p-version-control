@@ -405,6 +405,11 @@ def test_basic_two_peer_sync():
     synced = check_file_exists(dir_b, test_file, content)
 
     if synced:
+        # Windows does not preserve Unix executable bits, so only assert
+        # permission preservation on Unix-like platforms.
+        if is_windows():
+            log("TEST PASSED: Basic Two-Peer Sync")
+            return True
         st = os.stat(os.path.join(dir_b, test_file))
         is_exec = bool(st.st_mode & stat.S_IXUSR)
         log(f"File synced. Executable: {is_exec}")
