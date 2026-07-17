@@ -7,7 +7,9 @@ Supports 3+ peers, concurrent edits, network partition, large file transfer,
 C++ daemon crash recovery, and chain replication scenarios.
 """
 import os
+import platform
 import sys
+import tempfile
 import time
 import shutil
 import socket
@@ -23,14 +25,21 @@ import urllib.request
 import urllib.error
 
 # Test directories
-BASE_DIR = "/tmp/p2p_test"
+BASE_DIR = os.path.join(tempfile.gettempdir(), "p2p_test")
 PEER_DIRS = {}
 PEER_DBS = {}
 PEER_SOCKETS = {}
 PEER_PORTS = {}
 
+# Maps IPC_SOCKET path -> (host, port) when IPC_TCP_PORT is in use (Windows / containers)
+IPC_ENDPOINTS = {}
+
 processes = []
 test_results = {"passed": 0, "failed": 0, "skipped": 0}
+
+
+def is_windows():
+    return platform.system() == "Windows"
 
 
 def log(msg):
@@ -85,18 +94,31 @@ def setup_peer_env(peer_id, p2p_port, db_path, socket_path, dir_path, extra_env=
     env["DB_PATH"] = db_path
     env["HEALTH_PORT"] = str(p2p_port + 1000)
     env["P2P_PID_PATH"] = socket_path.replace(".sock", ".pid")
+
+    # On Windows, Unix-domain sockets are not available. Use a deterministic
+    # TCP port derived from the P2P port for IPC so the C++ daemon and the
+    # harness can both reach the Go coordinator.
+    if is_windows():
+        ipc_tcp_port = p2p_port + 10000
+        env["IPC_TCP_PORT"] = str(ipc_tcp_port)
+        IPC_ENDPOINTS[socket_path] = ("127.0.0.1", ipc_tcp_port)
+
     if extra_env:
         env.update(extra_env)
     return env
+
+
+def coordinator_binary():
+    return os.path.join("build", "go_coordinator" + (".exe" if is_windows() else ""))
 
 
 def start_peer(peer_id, p2p_port, db_path, socket_path, dir_path, extra_env=None):
     env = setup_peer_env(peer_id, p2p_port, db_path, socket_path, dir_path, extra_env)
     log(f"Starting {peer_id} on port {p2p_port}...")
 
-    log_file_out = open(f"/tmp/p2p_test_{peer_id}.log", "w")
+    log_file_out = open(os.path.join(tempfile.gettempdir(), f"p2p_test_{peer_id}.log"), "w")
     proc = subprocess.Popen(
-        ["./build/go_coordinator"],
+        [coordinator_binary()],
         env=env,
         stdout=log_file_out,
         stderr=subprocess.STDOUT,
@@ -178,6 +200,23 @@ def wait_for_connections(health_port, min_connections=1, timeout=20.0):
     return False
 
 
+def _connect_ipc_socket(socket_path, timeout):
+    """Create and connect the appropriate IPC socket (Unix domain or TCP)
+    based on the environment."""
+    endpoint = IPC_ENDPOINTS.get(socket_path)
+    if endpoint:
+        host, port = endpoint
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(timeout)
+        s.connect((host, port))
+        return s
+
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    s.settimeout(timeout)
+    s.connect(socket_path)
+    return s
+
+
 def send_ipc_message(socket_path, msg_type, payload, timeout=5.0):
     message = {
         "version": "1.0",
@@ -189,9 +228,7 @@ def send_ipc_message(socket_path, msg_type, payload, timeout=5.0):
     data = json.dumps(message).encode("utf-8")
     length_prefix = struct.pack(">I", len(data))
 
-    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    s.settimeout(timeout)
-    s.connect(socket_path)
+    s = _connect_ipc_socket(socket_path, timeout)
     s.sendall(length_prefix + data)
 
     # Read response if any
@@ -210,8 +247,19 @@ def send_ipc_message(socket_path, msg_type, payload, timeout=5.0):
 
 def wait_for_socket(socket_path, timeout=5.0):
     deadline = time.time() + timeout
+    endpoint = IPC_ENDPOINTS.get(socket_path)
     while time.time() < deadline:
-        if os.path.exists(socket_path):
+        if endpoint:
+            host, port = endpoint
+            try:
+                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                s.settimeout(1)
+                s.connect((host, port))
+                s.close()
+                return True
+            except (OSError, socket.timeout):
+                pass
+        elif os.path.exists(socket_path):
             try:
                 s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
                 s.settimeout(1)
