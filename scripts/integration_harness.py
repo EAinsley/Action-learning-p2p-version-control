@@ -118,8 +118,38 @@ def coordinator_binary():
     return os.path.join("build", "go_coordinator" + (".exe" if is_windows() else ""))
 
 
+def kill_orphaned_daemon_by_port(ipc_port):
+    if not is_windows():
+        return
+    try:
+        # Run netstat to find any processes using or connected to the IPC port
+        cmd = "netstat -ano"
+        res = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+        pids_to_kill = set()
+        for line in res.stdout.splitlines():
+            if f":{ipc_port}" in line or f" {ipc_port} " in line or str(ipc_port) in line:
+                parts = line.strip().split()
+                if len(parts) >= 5:
+                    pid = parts[-1]
+                    if pid.isdigit() and int(pid) > 0:
+                        pids_to_kill.add(pid)
+        for pid in pids_to_kill:
+            # Avoid killing our own python process
+            if int(pid) == os.getpid():
+                continue
+            log(f"Killing lingering process {pid} on IPC port {ipc_port}...")
+            subprocess.run(f"taskkill /F /PID {pid}", shell=True, capture_output=True)
+    except Exception as e:
+        log(f"Error killing orphaned daemon by port {ipc_port}: {e}")
+
+
 def start_peer(peer_id, p2p_port, db_path, socket_path, dir_path, extra_env=None):
     env = setup_peer_env(peer_id, p2p_port, db_path, socket_path, dir_path, extra_env)
+    
+    if is_windows():
+        ipc_tcp_port = p2p_port + 10000
+        kill_orphaned_daemon_by_port(ipc_tcp_port)
+
     log(f"Starting {peer_id} on port {p2p_port}...")
 
     logs_dir = os.path.join(WORKSPACE_ROOT, "p2p_test_logs")
@@ -882,6 +912,7 @@ def test_chain_replication():
     if not wait_for_connections(port_a + 1000, 1, timeout=20.0):
         log("A<->B link never established; cannot attempt relay")
         return False
+    time.sleep(2.0)  # Let C++ daemon and Go coordinator fully stabilize and start watching
 
     # Hop 1: file created on A must reach B directly.
     create_file(dir_a, "chain_file.txt", "relayed across the chain")
