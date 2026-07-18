@@ -177,8 +177,13 @@ func (sc *SyncCoordinator) startRepoWorkerLocked(repoID string) {
 		if _, err := os.Stat(cppExe); os.IsNotExist(err) {
 			candidates := []string{
 				"src/backend/cpp/build/bin/" + daemonBinaryName("p2p_daemon"),
+				"src/backend/cpp/build/bin/Release/" + daemonBinaryName("p2p_daemon"),
+				"src/backend/cpp/build/Release/" + daemonBinaryName("p2p_daemon"),
+				"src/backend/cpp/build/bin/Debug/" + daemonBinaryName("p2p_daemon"),
+				"src/backend/cpp/build/Debug/" + daemonBinaryName("p2p_daemon"),
 				"../cpp/build/bin/" + daemonBinaryName("p2p_daemon"),
 				"build/bin/" + daemonBinaryName("p2p_daemon"),
+				"build/" + daemonBinaryName("p2p_daemon"),
 			}
 			for _, c := range candidates {
 				if _, errStat := os.Stat(c); errStat == nil {
@@ -194,9 +199,16 @@ func (sc *SyncCoordinator) startRepoWorkerLocked(repoID string) {
 				log.Println("[SyncCoordinator] C++ daemon binary missing. Attempting build...")
 				_ = exec.Command("cmake", "-B", "src/backend/cpp/build", "-S", "src/backend/cpp").Run()
 				_ = exec.Command("cmake", "--build", "src/backend/cpp/build").Run()
-				builtPath := "src/backend/cpp/build/bin/" + daemonBinaryName("p2p_daemon")
-				if _, errStat := os.Stat(builtPath); errStat == nil {
-					cppExe = builtPath
+				builtCandidates := []string{
+					"src/backend/cpp/build/bin/" + daemonBinaryName("p2p_daemon"),
+					"src/backend/cpp/build/bin/Release/" + daemonBinaryName("p2p_daemon"),
+					"src/backend/cpp/build/Release/" + daemonBinaryName("p2p_daemon"),
+				}
+				for _, bc := range builtCandidates {
+					if _, errStat := os.Stat(bc); errStat == nil {
+						cppExe = bc
+						break
+					}
 				}
 			}
 		}

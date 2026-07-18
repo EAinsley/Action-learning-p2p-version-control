@@ -109,7 +109,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: integration-logs-${{ matrix.os }}
-          path: |
-            /tmp/p2p_test*.log
-            /tmp/p2p_test_*.log
+          path: p2p_test_logs/
           if-no-files-found: ignore

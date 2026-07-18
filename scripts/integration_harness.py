@@ -24,8 +24,9 @@ import sqlite3
 import urllib.request
 import urllib.error
 
-# Test directories
-BASE_DIR = os.path.join(tempfile.gettempdir(), "p2p_test")
+# Test directories - use Workspace Root to ensure reliable paths across all platforms and easy logging
+WORKSPACE_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+BASE_DIR = os.path.join(WORKSPACE_ROOT, "tmp_p2p_test")
 PEER_DIRS = {}
 PEER_DBS = {}
 PEER_SOCKETS = {}
@@ -116,7 +117,9 @@ def start_peer(peer_id, p2p_port, db_path, socket_path, dir_path, extra_env=None
     env = setup_peer_env(peer_id, p2p_port, db_path, socket_path, dir_path, extra_env)
     log(f"Starting {peer_id} on port {p2p_port}...")
 
-    log_file_out = open(os.path.join(tempfile.gettempdir(), f"p2p_test_{peer_id}.log"), "w")
+    logs_dir = os.path.join(WORKSPACE_ROOT, "p2p_test_logs")
+    os.makedirs(logs_dir, exist_ok=True)
+    log_file_out = open(os.path.join(logs_dir, f"p2p_test_{peer_id}.log"), "w")
     proc = subprocess.Popen(
         [coordinator_binary()],
         env=env,
@@ -334,10 +337,25 @@ def check_file_exists(dir_path, filepath, expected_content=None, timeout=30):
     while time.time() < deadline:
         if os.path.exists(full_path):
             if expected_content is not None:
-                with open(full_path, "r") as f:
-                    content = f.read()
-                if content == expected_content:
-                    return True
+                try:
+                    # Use binary mode "rb" to avoid CRLF newline translation mismatch on Windows,
+                    # and decode as utf-8 or treat as raw bytes if expected_content is bytes/string.
+                    with open(full_path, "rb") as f:
+                        data = f.read()
+                    
+                    content_str = data.decode("utf-8", errors="ignore")
+                    # If expected_content is a string, compare strings
+                    if isinstance(expected_content, str):
+                        if content_str == expected_content:
+                            return True
+                    else:
+                        # Otherwise compare raw bytes
+                        if data == expected_content:
+                            return True
+                except OSError:
+                    # Windows often throws PermissionError (Sharing Violation) if the C++ daemon or Go coordinator
+                    # is actively writing or closing the file. Retrying is the robust way to handle this.
+                    pass
             else:
                 return True
         time.sleep(0.5)
