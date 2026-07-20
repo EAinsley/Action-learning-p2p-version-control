@@ -1167,6 +1167,14 @@ func (sc *SyncCoordinator) HandleConflictResolution(repoID, path, resolution, pe
 		})
 	case "remote":
 		_ = sc.db.Metadata().HardDelete(repoID, path)
+		// Remove local file to prevent stale watcher events
+		if repo, err := sc.db.Repositories().Get(repoID); err == nil && repo != nil {
+			absPath := filepath.Join(repo.LocalPath, path)
+			os.Remove(absPath)
+		}
+		// Advertise empty metadata to peer so it responds with its version,
+		// triggering AcceptRemote and a download
+		sc.sendMetadataUpdateToPeer(peerID, repoID, path, 0, 0, "", 0, false, 0)
 		sc.db.History().LogEvent(&sqlite.SyncEvent{
 			EventID:      fmt.Sprintf("conflict_resolved_%d", time.Now().UnixNano()),
 			RepositoryID: repoID,
@@ -1177,6 +1185,7 @@ func (sc *SyncCoordinator) HandleConflictResolution(repoID, path, resolution, pe
 			Status:       "remote_accepted",
 		})
 	case "merge":
+		log.Printf("[SyncCoordinator] Manual merge requested for %s in repo %s. No automated merge available; user must merge files manually.\n", path, repoID)
 		sc.db.History().LogEvent(&sqlite.SyncEvent{
 			EventID:      fmt.Sprintf("conflict_resolved_%d", time.Now().UnixNano()),
 			RepositoryID: repoID,

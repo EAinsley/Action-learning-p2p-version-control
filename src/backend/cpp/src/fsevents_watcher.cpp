@@ -6,6 +6,7 @@
 #include <dispatch/dispatch.h>
 #include <iostream>
 #include <thread>
+#include <mutex>
 #include <string>
 #include <filesystem>
 
@@ -17,24 +18,36 @@ public:
     ~FSEventsWatcher() override { stop(); }
 
     bool start() override {
-        if (running_) return false;
-        running_ = true;
-        std::thread(&FSEventsWatcher::run, this).detach();
+        if (running_.exchange(true)) return false;
+        thread_ = std::thread(&FSEventsWatcher::run, this);
         return true;
     }
 
     void stop() override {
-        running_ = false;
-        if (stream_) {
-            FSEventStreamStop(stream_);
-            FSEventStreamInvalidate(stream_);
-            FSEventStreamRelease(stream_);
-            stream_ = nullptr;
+        if (!running_.exchange(false)) return;
+        {
+            std::lock_guard<std::mutex> lock(streamMutex_);
+            if (stream_) {
+                FSEventStreamStop(stream_);
+                FSEventStreamInvalidate(stream_);
+                FSEventStreamRelease(stream_);
+                stream_ = nullptr;
+            }
+        }
+        if (sem_) {
+            dispatch_semaphore_signal(sem_); // unblock run()
+        }
+        if (thread_.joinable()) {
+            thread_.join();
         }
     }
 
 private:
+    std::thread thread_;
+    std::mutex streamMutex_;
     FSEventStreamRef stream_ = nullptr;
+    dispatch_semaphore_t sem_ = nullptr;
+    dispatch_queue_t queue_ = nullptr;
 
     static void callback(
         ConstFSEventStreamRef,
@@ -69,18 +82,33 @@ private:
         ctx.info = this;
 
         CFAbsoluteTime latency = 0.5;
-        stream_ = FSEventStreamCreate(
+        FSEventStreamRef s = FSEventStreamCreate(
             nullptr, &callback, &ctx, pathsToWatch,
             kFSEventStreamEventIdSinceNow, latency,
             kFSEventStreamCreateFlagFileEvents |
             kFSEventStreamCreateFlagWatchRoot);
 
-        if (stream_) {
-            dispatch_queue_t queue = dispatch_queue_create("p2p.fsevents", nullptr);
-            FSEventStreamSetDispatchQueue(stream_, queue);
-            FSEventStreamStart(stream_);
-            dispatch_semaphore_t sem = dispatch_semaphore_create(0);
-            dispatch_semaphore_wait(sem, DISPATCH_TIME_FOREVER);
+        {
+            std::lock_guard<std::mutex> lock(streamMutex_);
+            if (!running_) {
+                if (s) {
+                    FSEventStreamRelease(s);
+                }
+                CFRelease(pathsToWatch);
+                CFRelease(cfPath);
+                return;
+            }
+            stream_ = s;
+        }
+
+        if (s) {
+            queue_ = dispatch_queue_create("p2p.fsevents", nullptr);
+            FSEventStreamSetDispatchQueue(s, queue_);
+            FSEventStreamStart(s);
+            sem_ = dispatch_semaphore_create(0);
+            dispatch_semaphore_wait(sem_, DISPATCH_TIME_FOREVER);
+            dispatch_release(queue_);
+            queue_ = nullptr;
         }
 
         CFRelease(pathsToWatch);
