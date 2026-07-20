@@ -2,6 +2,7 @@ package sync
 
 import (
 	"crypto/sha256"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -81,6 +82,12 @@ func NewSyncCoordinator(
 		lamportClock:     versioning.NewLamportClock(),
 		vectorClock:      versioning.NewVectorClock(),
 	}
+}
+
+// SetTLSConfig configures TLS for file transfer connections.
+// When nil (default), plain TCP is used for P2P file transfers.
+func (sc *SyncCoordinator) SetTLSConfig(config *tls.Config) {
+	sc.transferMgr.SetTLSConfig(config)
 }
 
 // Start boots the coordinator, starts database repos, and begins processing queues.

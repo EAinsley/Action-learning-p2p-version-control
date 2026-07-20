@@ -1,6 +1,7 @@
 package transfer
 
 import (
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -35,6 +36,7 @@ type FileTransferManager struct {
 	ipcServer *ipc.IpcServer
 	sessions  map[string]*TransferSession
 	mu        sync.RWMutex
+	tlsConfig *tls.Config
 }
 
 func NewFileTransferManager(ipcServer *ipc.IpcServer) *FileTransferManager {
@@ -44,8 +46,20 @@ func NewFileTransferManager(ipcServer *ipc.IpcServer) *FileTransferManager {
 	}
 }
 
+// SetTLSConfig configures the FileTransferManager to use TLS for network-facing
+// transfer connections. When nil (default), plain TCP is used.
+func (ft *FileTransferManager) SetTLSConfig(config *tls.Config) {
+	ft.mu.Lock()
+	defer ft.mu.Unlock()
+	ft.tlsConfig = config
+}
+
 func (ft *FileTransferManager) StartDownload(transferID, filePath, repoID, peerID, expectedHash string, expectedSize int64, peerAddr string, peerPort int, mode uint32) error {
-	netConn, err := dialWithFallback(peerAddr, peerPort, 10*time.Second)
+	ft.mu.RLock()
+	tlsCfg := ft.tlsConfig
+	ft.mu.RUnlock()
+
+	netConn, err := dialWithFallback(peerAddr, peerPort, 10*time.Second, tlsCfg)
 	if err != nil {
 		return fmt.Errorf("failed to connect to remote peer transfer port %s:%d: %w", peerAddr, peerPort, err)
 	}
@@ -120,7 +134,17 @@ func (ft *FileTransferManager) StartUpload(transferID, filePath, basePath, repoI
 		}
 	}
 
-	netListener, err := net.Listen("tcp", ":0")
+	ft.mu.RLock()
+	tlsCfg := ft.tlsConfig
+	ft.mu.RUnlock()
+
+	var netListener net.Listener
+	var err error
+	if tlsCfg != nil {
+		netListener, err = tls.Listen("tcp", ":0", tlsCfg)
+	} else {
+		netListener, err = net.Listen("tcp", ":0")
+	}
 	if err != nil {
 		return 0, "", fmt.Errorf("failed to listen on P2P network port: %w", err)
 	}
@@ -401,9 +425,15 @@ func (ft *FileTransferManager) GetSessions() []TransferSession {
 	return list
 }
 
-func dialWithFallback(address string, port int, timeout time.Duration) (net.Conn, error) {
+func dialWithFallback(address string, port int, timeout time.Duration, tlsCfg *tls.Config) (net.Conn, error) {
 	addr := net.JoinHostPort(address, strconv.Itoa(port))
-	conn, err := net.DialTimeout("tcp", addr, timeout)
+	var conn net.Conn
+	var err error
+	if tlsCfg != nil {
+		conn, err = tls.DialWithDialer(&net.Dialer{Timeout: timeout}, "tcp", addr, tlsCfg)
+	} else {
+		conn, err = net.DialTimeout("tcp", addr, timeout)
+	}
 	if err == nil {
 		return conn, nil
 	}
@@ -418,7 +448,13 @@ func dialWithFallback(address string, port int, timeout time.Duration) (net.Conn
 				if (iface.Flags & net.FlagUp) != 0 {
 					zonedAddr := net.JoinHostPort(address+"%"+iface.Name, strconv.Itoa(port))
 					log.NewLogger("FileTransferManager").Warn().Msg("Trying fallback zoned address: "+zonedAddr)
-					c, e := net.DialTimeout("tcp", zonedAddr, 2*time.Second)
+					var c net.Conn
+					var e error
+					if tlsCfg != nil {
+						c, e = tls.DialWithDialer(&net.Dialer{Timeout: 2 * time.Second}, "tcp", zonedAddr, tlsCfg)
+					} else {
+						c, e = net.DialTimeout("tcp", zonedAddr, 2*time.Second)
+					}
 					if e == nil {
 						return c, nil
 					}
@@ -431,7 +467,13 @@ func dialWithFallback(address string, port int, timeout time.Duration) (net.Conn
 		for _, lhost := range localhosts {
 			laddr := net.JoinHostPort(lhost, strconv.Itoa(port))
 			log.NewLogger("FileTransferManager").Warn().Msg("Trying local fallback address: "+laddr)
-			c, e := net.DialTimeout("tcp", laddr, 1*time.Second)
+			var c net.Conn
+			var e error
+			if tlsCfg != nil {
+				c, e = tls.DialWithDialer(&net.Dialer{Timeout: 1 * time.Second}, "tcp", laddr, tlsCfg)
+			} else {
+				c, e = net.DialTimeout("tcp", laddr, 1*time.Second)
+			}
 			if e == nil {
 				return c, nil
 			}

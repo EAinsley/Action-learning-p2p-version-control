@@ -1,6 +1,7 @@
 package network
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -56,6 +57,17 @@ type ConnectionManager struct {
 	OnConnected    func(peerID string)
 	OnDisconnected func(peerID string)
 	OnMessage      func(peerID string, msg *ipc.Message)
+
+	// Optional TLS config; when non-nil all P2P control connections use TLS 1.3 mTLS.
+	tlsConfig *tls.Config
+}
+
+// SetTLSConfig configures the ConnectionManager to use TLS for all P2P connections.
+// When nil (default), plain TCP is used. Must be set before StartServer or Connect.
+func (cm *ConnectionManager) SetTLSConfig(config *tls.Config) {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	cm.tlsConfig = config
 }
 
 // SetOnConnected sets the OnConnected callback in a thread-safe manner.
@@ -98,10 +110,21 @@ func (cm *ConnectionManager) LocalPeerID() string {
 	return cm.localPeerID
 }
 
-// StartServer starts the TCP server to listen for incoming P2P connections
+// StartServer starts the TCP/TLS server to listen for incoming P2P connections.
+// If SetTLSConfig was called with a non-nil config, the listener uses TLS 1.3 mTLS.
 func (cm *ConnectionManager) StartServer(port int) error {
 	addr := ":" + strconv.Itoa(port)
-	listener, err := net.Listen("tcp", addr)
+	cm.mu.RLock()
+	tlsCfg := cm.tlsConfig
+	cm.mu.RUnlock()
+	var listener net.Listener
+	var err error
+	if tlsCfg != nil {
+		listener, err = tls.Listen("tcp", addr, tlsCfg)
+		log.Printf("P2P TLS server listening on port %d\n", port)
+	} else {
+		listener, err = net.Listen("tcp", addr)
+	}
 	if err != nil {
 		return fmt.Errorf("failed to start P2P server on port %d: %v", port, err)
 	}
@@ -625,7 +648,18 @@ func (cm *ConnectionManager) Port() int {
 
 func (cm *ConnectionManager) dialWithFallback(address string, port int, timeout time.Duration) (net.Conn, error) {
 	addr := net.JoinHostPort(address, strconv.Itoa(port))
-	conn, err := net.DialTimeout("tcp", addr, timeout)
+	cm.mu.RLock()
+	tlsCfg := cm.tlsConfig
+	cm.mu.RUnlock()
+
+	dialer := &net.Dialer{Timeout: timeout}
+	var conn net.Conn
+	var err error
+	if tlsCfg != nil {
+		conn, err = tls.DialWithDialer(dialer, "tcp", addr, tlsCfg)
+	} else {
+		conn, err = net.DialTimeout("tcp", addr, timeout)
+	}
 	if err == nil {
 		return conn, nil
 	}
@@ -639,7 +673,13 @@ func (cm *ConnectionManager) dialWithFallback(address string, port int, timeout 
 					continue
 				}
 				zonedAddr := net.JoinHostPort(address+"%"+iface.Name, strconv.Itoa(port))
-				c, e := net.DialTimeout("tcp", zonedAddr, 1*time.Second)
+				var c net.Conn
+				var e error
+				if tlsCfg != nil {
+					c, e = tls.DialWithDialer(&net.Dialer{Timeout: 1 * time.Second}, "tcp", zonedAddr, tlsCfg)
+				} else {
+					c, e = net.DialTimeout("tcp", zonedAddr, 1*time.Second)
+				}
 				if e == nil {
 					return c, nil
 				}
@@ -648,7 +688,14 @@ func (cm *ConnectionManager) dialWithFallback(address string, port int, timeout 
 
 		localhosts := []string{"127.0.0.1", "::1"}
 		for _, lhost := range localhosts {
-			c, e := net.DialTimeout("tcp", net.JoinHostPort(lhost, strconv.Itoa(port)), 1*time.Second)
+			laddr := net.JoinHostPort(lhost, strconv.Itoa(port))
+			var c net.Conn
+			var e error
+			if tlsCfg != nil {
+				c, e = tls.DialWithDialer(&net.Dialer{Timeout: 1 * time.Second}, "tcp", laddr, tlsCfg)
+			} else {
+				c, e = net.DialTimeout("tcp", laddr, 1*time.Second)
+			}
 			if e == nil {
 				return c, nil
 			}
