@@ -3,6 +3,7 @@
 #ifdef __linux__
 
 #include <sys/inotify.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <poll.h>
 #include <iostream>
