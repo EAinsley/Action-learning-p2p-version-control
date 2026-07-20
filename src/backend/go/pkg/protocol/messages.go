@@ -3,6 +3,8 @@ package protocol
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
+	"strings"
 )
 
 // ============================================================================
@@ -285,6 +287,9 @@ func (p *FileRequestPayload) Validate() error {
 	if p.Hash == "" {
 		return errors.New("hash cannot be empty")
 	}
+	if filepath.IsAbs(p.Path) || strings.Contains(p.Path, "..") {
+		return errors.New("path must be relative and must not contain '..'")
+	}
 	return nil
 }
 
@@ -293,7 +298,7 @@ type FileResponsePayload struct {
 	Path          string `json:"path"`
 	Hash          string `json:"hash"`
 	ContentBase64 string `json:"content_base64,omitempty"`
-	FileContent   string `json:"file_content,omitempty"`  // Base64 for files <1MB
+	FileContent   string `json:"file_content,omitempty"` // Base64 for files <1MB
 	ContentHash   string `json:"content_hash,omitempty"`
 	ContentSize   int64  `json:"content_size,omitempty"`
 	TransferPort  int    `json:"transfer_port,omitempty"`

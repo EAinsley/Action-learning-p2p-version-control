@@ -178,9 +178,10 @@ int main(int argc, char* argv[]) {
                         auto msg = nlohmann::json::parse(raw);
                         handle_ipc_message(msg, repo_id, watch_path);
                     } catch (...) {}
-                } else {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                }
+            } else {
+                if (g_shutdown) break;
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
             }
         }
     });
@@ -221,20 +222,8 @@ int main(int argc, char* argv[]) {
 
             if (event.type != WatchEventType::Deleted && fs::exists(abs_path)) {
                 try {
-                    // Read file content once to compute both size and hash
-                    // atomically, avoiding TOCTOU races where the file is
-                    // modified between the size and hash calls.
-                    {
-                        std::ifstream file(abs_path.string(), std::ios::binary | std::ios::ate);
-                        if (file) {
-                            size = file.tellg();
-                            file.seekg(0, std::ios::beg);
-                            std::string content(static_cast<std::size_t>(size), '\0');
-                            if (file.read(content.data(), static_cast<std::streamsize>(size))) {
-                                hash = crypto::sha256(content);
-                            }
-                        }
-                    }
+                    size = fs::file_size(abs_path);
+                    crypto::sha256_file(abs_path.string(), hash);
                     auto write_time = fs::last_write_time(abs_path);
                     #ifdef _WIN32
                     auto sctp = std::chrono::clock_cast<std::chrono::system_clock>(write_time);
@@ -275,7 +264,9 @@ int main(int argc, char* argv[]) {
 
             if (ipc_client->isConnected()) {
                 std::cout << "[C++ Daemon] Sending IPC change\n";
-                ipc_client->send(message.dump());
+                if (!ipc_client->send(message.dump())) {
+                    std::cout << "[C++ Daemon] IPC send failed\n";
+                }
             } else {
                 std::cout << "[C++ Daemon] IPC disconnected, change not sent\n";
             }

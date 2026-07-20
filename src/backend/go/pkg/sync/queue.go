@@ -103,7 +103,7 @@ func (q *SyncQueue) Pop() *SyncTask {
 		if len(tasks) > 0 {
 			task := tasks[0]
 			q.queues[repoID] = tasks[1:]
-			
+
 			// Update nextRepo pointer for the next pop
 			q.nextRepo = (idx + 1) % numRepos
 			return task
@@ -111,6 +111,32 @@ func (q *SyncQueue) Pop() *SyncTask {
 	}
 
 	return nil
+}
+
+// Requeue inserts a task at the front of its repo's queue, bypassing dedup.
+// Used to retry tasks that couldn't be processed immediately (e.g. no semaphore).
+func (q *SyncQueue) Requeue(task *SyncTask) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	repoID := task.RepoID
+	tasks := q.queues[repoID]
+	q.queues[repoID] = append([]*SyncTask{task}, tasks...)
+}
+
+// HasPending checks if a Download task for the given path and hash already exists in the queue.
+func (q *SyncQueue) HasPending(repoID, path, hash string) bool {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	tasks, exists := q.queues[repoID]
+	if !exists {
+		return false
+	}
+	for _, t := range tasks {
+		if t.FilePath == path && t.Type == Download && t.Hash == hash {
+			return true
+		}
+	}
+	return false
 }
 
 // RemoveRepository removes all pending tasks for a given repository.

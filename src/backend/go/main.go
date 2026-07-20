@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -9,6 +10,7 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -130,6 +132,38 @@ func main() {
 
 	log.Printf("[Main] PID: %d, PeerID: %s, P2P Port: %d, IPC Socket: %s\n", os.Getpid(), localPeerID, p2pPort, ipcSocket)
 
+	// Initialize optional TLS for P2P connections.
+	// Enable with P2P_TLS_ENABLED=1; certs are stored in P2P_CERT_DIR (default ~/.p2p/certs).
+	var tlsConfig *tls.Config
+	if envTLS := os.Getenv("P2P_TLS_ENABLED"); envTLS == "1" || strings.EqualFold(envTLS, "true") {
+		certDir := os.Getenv("P2P_CERT_DIR")
+		if certDir == "" {
+			home, err := os.UserHomeDir()
+			if err == nil {
+				certDir = filepath.Join(home, ".p2p", "certs")
+			} else {
+				certDir = "/tmp/p2p_certs"
+			}
+		}
+		if err := network.GenerateCA(certDir); err != nil {
+			log.Printf("[Main] Failed to generate CA: %v\n", err)
+			removePIDFile()
+			os.Exit(1)
+		}
+		// Use a single TLS config that works for both server and client (mTLS).
+		// ServerName is left empty so Go does not enforce hostname matching
+		// (irrelevant for P2P where peers connect by IP, not DNS).
+		cfg, err := network.GetTLSConfig(certDir, localPeerID, true)
+		if err != nil {
+			log.Printf("[Main] Failed to get TLS config: %v\n", err)
+			removePIDFile()
+			os.Exit(1)
+		}
+		cfg.ServerName = "" // P2P peers connect by IP, not DNS
+		tlsConfig = cfg
+		log.Printf("[Main] TLS enabled (cert dir: %s)\n", certDir)
+	}
+
 	// Start IPC server
 	ipcServer := ipc.NewIpcServer(ipcSocket)
 	if err := ipcServer.Start(); err != nil {
@@ -141,6 +175,9 @@ func main() {
 
 	// Start connection manager with localPeerID
 	connMgr := network.NewConnectionManager(localPeerID)
+	if tlsConfig != nil {
+		connMgr.SetTLSConfig(tlsConfig)
+	}
 	if err := connMgr.StartServer(p2pPort); err != nil {
 		log.Printf("[Main] Failed to start P2P server: %v\n", err)
 		removePIDFile()
@@ -232,6 +269,9 @@ func main() {
 
 	// Start sync coordinator
 	coord := sync.NewSyncCoordinator(db, ipcServer, connMgr, localPeerID)
+	if tlsConfig != nil {
+		coord.SetTLSConfig(tlsConfig)
+	}
 	if err := coord.Start(); err != nil {
 		log.Printf("[Main] Failed to start sync coordinator: %v\n", err)
 		removePIDFile()
@@ -255,7 +295,7 @@ func main() {
 	// Hook up incoming P2P message forwards
 	connMgr.SetOnMessage(func(peerID string, msg *ipc.Message) {
 		log.Printf("Received P2P message from peer %s: %s\n", peerID, msg.Type)
-		
+
 		// Let the coordinator process sync-related network messages first
 		if msg.Type == "file_metadata_update" || msg.Type == "file_request" || msg.Type == "file_response" {
 			if err := coord.HandleP2PMessage(peerID, msg); err != nil {
@@ -334,12 +374,6 @@ func main() {
 	if healthSrv != nil {
 		healthSrv.Close()
 	}
-}
-
-func handleFileChanged(msg *ipc.Message, connMgr *network.ConnectionManager) error {
-	fmt.Println("Broadcasting file change to all peers...")
-	connMgr.Broadcast(msg)
-	return nil
 }
 
 func sendPeerList(registry *discovery.PeerRegistry, connMgr *network.ConnectionManager, ipcServer *ipc.IpcServer) error {
