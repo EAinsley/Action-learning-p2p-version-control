@@ -69,8 +69,9 @@ def clean_env():
 
 def build_binaries():
     log("Building Go coordinator...")
+    out_go = "../../../build/go_coordinator" + (".exe" if is_windows() else "")
     res = subprocess.run(
-        ["go", "build", "-o", "../../../build/go_coordinator", "main.go"],
+        ["go", "build", "-o", out_go, "main.go"],
         cwd="src/backend/go",
         capture_output=True,
     )
@@ -80,12 +81,31 @@ def build_binaries():
 
     log("Building C++ daemon (if CMake project exists)...")
     if os.path.exists("src/backend/cpp/CMakeLists.txt"):
-        res = subprocess.run(
-            ["cmake", "--build", "src/backend/cpp/build"],
-            capture_output=True,
-        )
+        cmd = ["cmake", "--build", "src/backend/cpp/build"]
+        if is_windows():
+            cmd.extend(["--config", "Release"])
+        res = subprocess.run(cmd, capture_output=True)
         if res.returncode != 0:
             log(f"C++ compilation failed: {res.stderr.decode()}")
+
+        daemon_name = "p2p_daemon.exe" if is_windows() else "p2p_daemon"
+        candidates = [
+            os.path.join("src", "backend", "cpp", "build", "bin", daemon_name),
+            os.path.join("src", "backend", "cpp", "build", "bin", "Release", daemon_name),
+            os.path.join("src", "backend", "cpp", "build", "Release", daemon_name),
+            os.path.join("src", "backend", "cpp", "build", "bin", "Debug", daemon_name),
+            os.path.join("src", "backend", "cpp", "build", "Debug", daemon_name),
+        ]
+        found = False
+        for candidate in candidates:
+            if os.path.exists(candidate):
+                os.makedirs("build", exist_ok=True)
+                shutil.copy(candidate, os.path.join("build", daemon_name))
+                log(f"Copied C++ daemon from {candidate} to build/{daemon_name}")
+                found = True
+                break
+        if not found:
+            log(f"Warning: Could not locate built C++ daemon in {candidates}")
     else:
         log("No C++ CMake project found, skipping C++ build")
     return True
