@@ -900,6 +900,7 @@ func (sc *SyncCoordinator) HandleP2PMessage(peerID string, msg *ipc.Message) err
 		if err := payload.Validate(); err != nil {
 			return fmt.Errorf("invalid file_response from peer %s: %w", peerID, err)
 		}
+		payload.Path = filepath.ToSlash(filepath.Clean(payload.Path))
 
 		if payload.Error != "" {
 			log.Printf("[SyncCoordinator] Remote file request failed: %s\n", payload.Error)
@@ -985,15 +986,14 @@ func (sc *SyncCoordinator) HandleP2PMessage(peerID string, msg *ipc.Message) err
 			return nil
 		}
 
-		cleanPath := filepath.Clean(payload.Path)
-		if filepath.IsAbs(cleanPath) || strings.HasPrefix(cleanPath, "..") || strings.Contains(cleanPath, "../") || strings.Contains(cleanPath, "..\\") {
+		if filepath.IsAbs(payload.Path) || strings.HasPrefix(payload.Path, "..") || strings.Contains(payload.Path, "../") {
 			log.Printf("[SyncCoordinator] Security warning: path traversal attempt rejected in StartDownload for path: %s\n", payload.Path)
 			return fmt.Errorf("invalid path traversal in download: %s", payload.Path)
 		}
 
 		// Start download session: connect to the peer's dynamic transferPort
 		transferID := fmt.Sprintf("dl_%d_%s", time.Now().UnixNano(), pDetails.repoID)
-		err = sc.transferMgr.StartDownload(transferID, cleanPath, pDetails.repoID, peerID, payload.Hash, pDetails.size, host, payload.TransferPort, pDetails.mode)
+		err = sc.transferMgr.StartDownload(transferID, payload.Path, pDetails.repoID, peerID, payload.Hash, pDetails.size, host, payload.TransferPort, pDetails.mode)
 		if err != nil {
 			log.Printf("[SyncCoordinator] StartDownload failed: %v\n", err)
 			if pDetails.retries < MaxDownloadRetries {
