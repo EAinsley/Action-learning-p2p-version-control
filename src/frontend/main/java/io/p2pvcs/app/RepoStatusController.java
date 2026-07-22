@@ -106,9 +106,7 @@ public class RepoStatusController {
         if (!obj.has("files") || obj.get("files").isJsonNull()) return;
         JsonArray files = obj.getAsJsonArray("files");
 
-        int selectedIndex = filesListView.getSelectionModel().getSelectedIndex();
-        filesListView.getItems().clear();
-
+        java.util.List<String> newItems = new java.util.ArrayList<>();
         for (JsonElement fileEl : files) {
             if (fileEl != null && fileEl.isJsonObject()) {
                 JsonObject fileObj = fileEl.getAsJsonObject();
@@ -117,12 +115,16 @@ public class RepoStatusController {
                 long version = fileObj.has("version") && !fileObj.get("version").isJsonNull() ? fileObj.get("version").getAsLong() : 0;
 
                 String displayText = String.format("%s (v%d, %s)", path, version, formatBytes(size));
-                filesListView.getItems().add(displayText);
+                newItems.add(displayText);
             }
         }
 
-        if (selectedIndex >= 0 && selectedIndex < filesListView.getItems().size()) {
-            filesListView.getSelectionModel().select(selectedIndex);
+        if (!newItems.equals(filesListView.getItems())) {
+            int selectedIndex = filesListView.getSelectionModel().getSelectedIndex();
+            filesListView.getItems().setAll(newItems);
+            if (selectedIndex >= 0 && selectedIndex < filesListView.getItems().size()) {
+                filesListView.getSelectionModel().select(selectedIndex);
+            }
         }
 
         syncStatusLabel.setText("Sync Status: Idle / Up to date");

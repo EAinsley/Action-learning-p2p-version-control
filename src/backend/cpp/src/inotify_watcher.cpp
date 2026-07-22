@@ -20,28 +20,32 @@ public:
     ~InotifyWatcher() override { stop(); }
 
     bool start() override {
-        if (running_) return false;
+        if (running_.exchange(true)) return false;
         inotifyFd_ = inotify_init1(IN_NONBLOCK);
         if (inotifyFd_ < 0) {
             std::cerr << "[InotifyWatcher] inotify_init1 failed\n";
+            running_ = false;
             return false;
         }
         addWatchRecursive(watchPath_);
-        running_ = true;
-        std::thread(&InotifyWatcher::handleEvents, this).detach();
+        thread_ = std::thread(&InotifyWatcher::handleEvents, this);
         return true;
     }
 
     void stop() override {
-        running_ = false;
+        if (!running_.exchange(false)) return;
         if (inotifyFd_ >= 0) {
             ::close(inotifyFd_);
             inotifyFd_ = -1;
+        }
+        if (thread_.joinable()) {
+            thread_.join();
         }
     }
 
 private:
     int inotifyFd_ = -1;
+    std::thread thread_;
     std::map<int, std::string> wdToPath_; // watch descriptor -> relative directory path
 
     std::string relativeDir(const std::string& path) {

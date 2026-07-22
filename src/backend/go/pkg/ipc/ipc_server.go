@@ -225,6 +225,7 @@ func (s *IpcServer) SendMessage(msg *Message) {
 func (s *IpcServer) Stop() {
 	s.stopOnce.Do(func() {
 		close(s.stopChan)
+		close(s.ToC)
 	})
 
 	s.clientMu.Lock()
@@ -236,9 +237,6 @@ func (s *IpcServer) Stop() {
 	if s.listener != nil {
 		s.listener.Close()
 	}
-	s.stopOnce.Do(func() {
-		close(s.ToC)
-	})
 }
 
 // readFull reads exactly len(buf) bytes from conn.

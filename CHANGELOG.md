@@ -7,7 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-## [1.6.2] - 2026-07-17
+## [1.6.4] - 2026-07-22
+
+### Fixed
+- Fixed macOS UI freeze and coordinator lockup by unscoping global mutex during initial directory scanning and file hashing.
+- Fixed C++ daemon socket thread data race and crashes on macOS FSEvents event dispatch threads.
+- Added path traversal bounds validation for streamed file downloads in both Go coordinator and C++ daemon.
+- Fixed deadlock hazard in `VectorClock.Compare()` by eliminating dual lock acquisition.
+- Fixed IPC server channel closure bug on shutdown.
+- Fixed mDNS refresh goroutine leak on context timeout.
+- Enabled SQLite WAL mode reader concurrency with connection pooling (`SetMaxOpenConns(10)`, `_busy_timeout=5000`).
+- Filtered out `.DS_Store`, `.git`, `.tmp` files, and directory event payloads in C++ daemon.
+- Optimized JavaFX ListView updates using batch comparison and `setAll()` to prevent UI thread jank.
 
 ### Added
 - Containerized multi-peer network test harness (`scripts/docker_harness.py`, `Dockerfile.e2e`, `docker-compose.test.yml`) with isolated scenarios: basic two-peer sync, three-peer sync, and network partition via real Docker network disconnect/reconnect.

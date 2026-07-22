@@ -250,7 +250,9 @@ func (pr *PeerRegistry) RequestRefresh() {
 	}
 
 	entries := make(chan *zeroconf.ServiceEntry, 16)
+	done := make(chan struct{})
 	go func(results <-chan *zeroconf.ServiceEntry) {
+		defer close(done)
 		for entry := range results {
 			pr.handlePeerDiscovered(entry)
 		}
@@ -263,6 +265,8 @@ func (pr *PeerRegistry) RequestRefresh() {
 		log.Printf("Refresh: browse failed: %v", err)
 	}
 	<-ctx.Done()
+	close(entries)
+	<-done
 }
 
 func (pr *PeerRegistry) AddManualPeer(id, address string, port int) {

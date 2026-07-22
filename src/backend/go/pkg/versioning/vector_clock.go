@@ -107,17 +107,20 @@ func (vc *VectorClock) AsMap() map[string]uint64 {
 //   - After:      all components ≥ right, and at least one is strictly >
 //   - Concurrent: some components are < and some are >
 func (vc *VectorClock) Compare(other *VectorClock) Ordering {
+	if other == nil {
+		return After
+	}
+	otherMap := other.AsMap()
+
 	vc.mu.RLock()
 	defer vc.mu.RUnlock()
-	other.mu.RLock()
-	defer other.mu.RUnlock()
 
 	// Collect the union of all keys.
 	keys := make(map[string]struct{})
 	for k := range vc.clocks {
 		keys[k] = struct{}{}
 	}
-	for k := range other.clocks {
+	for k := range otherMap {
 		keys[k] = struct{}{}
 	}
 
@@ -126,7 +129,7 @@ func (vc *VectorClock) Compare(other *VectorClock) Ordering {
 
 	for k := range keys {
 		l := vc.clocks[k]
-		r := other.clocks[k]
+		r := otherMap[k]
 		if l < r {
 			hasLess = true
 		}

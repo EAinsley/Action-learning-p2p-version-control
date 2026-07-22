@@ -90,20 +90,22 @@ public class RepositoryListController {
 
         JsonArray repos = obj.getAsJsonArray("repos");
 
-        int selectedIndex = repoListView.getSelectionModel().getSelectedIndex();
-
-        repoListView.getItems().clear();
+        java.util.List<String> newItems = new java.util.ArrayList<>();
         for (JsonElement repoEl : repos) {
             if (repoEl != null && repoEl.isJsonObject()) {
                 JsonObject repoObj = repoEl.getAsJsonObject();
                 if (repoObj.has("id") && !repoObj.get("id").isJsonNull()) {
-                    repoListView.getItems().add(repoObj.get("id").getAsString());
+                    newItems.add(repoObj.get("id").getAsString());
                 }
             }
         }
 
-        if (selectedIndex >= 0 && selectedIndex < repoListView.getItems().size()) {
-            repoListView.getSelectionModel().select(selectedIndex);
+        if (!newItems.equals(repoListView.getItems())) {
+            int selectedIndex = repoListView.getSelectionModel().getSelectedIndex();
+            repoListView.getItems().setAll(newItems);
+            if (selectedIndex >= 0 && selectedIndex < repoListView.getItems().size()) {
+                repoListView.getSelectionModel().select(selectedIndex);
+            }
         }
     }
 

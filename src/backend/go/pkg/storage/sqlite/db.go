@@ -61,7 +61,13 @@ type DB struct {
 // applies the schema. Pass ":memory:" for an in-memory database that
 // is useful in tests.
 func Open(path string) (*DB, error) {
-	conn, err := sql.Open("sqlite3", path+"?_foreign_keys=on&_journal_mode=WAL")
+	connStr := path
+	if strings.Contains(path, "?") {
+		connStr += "&_foreign_keys=on&_journal_mode=WAL&_busy_timeout=5000"
+	} else {
+		connStr += "?_foreign_keys=on&_journal_mode=WAL&_busy_timeout=5000"
+	}
+	conn, err := sql.Open("sqlite3", connStr)
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite db: %w", err)
 	}
@@ -72,8 +78,13 @@ func Open(path string) (*DB, error) {
 		return nil, fmt.Errorf("ping sqlite db: %w", err)
 	}
 
-	// Limit to 1 connection to prevent pool fragmentation in SQLite
-	conn.SetMaxOpenConns(1)
+	// Enable WAL mode reader concurrency with connection pooling
+	if path != ":memory:" {
+		conn.SetMaxOpenConns(10)
+		conn.SetMaxIdleConns(5)
+	} else {
+		conn.SetMaxOpenConns(1)
+	}
 
 	db := &DB{conn: conn}
 	if err := db.applySchema(); err != nil {

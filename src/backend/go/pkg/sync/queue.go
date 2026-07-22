@@ -14,6 +14,9 @@ const (
 	Download TaskType = "download"
 )
 
+// MaxDownloadRetries sets how many times a failed download is retried before giving up.
+const MaxDownloadRetries = 3
+
 // SyncTask represents a single file synchronization unit.
 type SyncTask struct {
 	RepoID    string
@@ -24,6 +27,7 @@ type SyncTask struct {
 	Timestamp time.Time
 	PeerID    string // Target peer to sync with
 	Mode      uint32
+	Retries   int    // number of times this task has been retried
 }
 
 // Priority computes the priority of a task (lower values mean higher priority).

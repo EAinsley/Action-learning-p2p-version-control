@@ -201,17 +201,25 @@ int main(int argc, char* argv[]) {
 
             std::string normPath = normalize_path(event.path);
 
+            if (normPath.empty()) return;
+
+            // Skip hidden files/directories (.git, .DS_Store, etc.)
+            if (normPath[0] == '.' || normPath.find("/.") != std::string::npos) {
+                return;
+            }
+
             // Skip .tmp files (transfer internals) to prevent metadata races.
             if (normPath.size() >= 4 && normPath.substr(normPath.size() - 4) == ".tmp") {
                 return;
             }
 
-            nlohmann::json test_json;
-            test_json["filename"] = normPath;
-            test_json["action"] = action;
-            std::cout << "[JSON] " << test_json.dump() << "\n" << std::flush;
-
             fs::path abs_path = fs::path(watch_path) / normPath;
+
+            // Skip directory events (only track regular file changes)
+            std::error_code ec;
+            if (fs::exists(abs_path, ec) && fs::is_directory(abs_path, ec)) {
+                return;
+            }
 
             long long size = 0;
             std::string hash;

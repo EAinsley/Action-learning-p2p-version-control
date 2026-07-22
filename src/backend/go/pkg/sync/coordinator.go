@@ -29,9 +29,11 @@ import (
 // SyncCoordinator coordinates multi-repository synchronization across the local
 // C++ daemon and P2P network.
 type pendingDownload struct {
-	size   int64
-	repoID string
-	mode   uint32
+	size    int64
+	repoID  string
+	mode    uint32
+	peerID  string
+	retries int
 }
 
 type SyncCoordinator struct {
@@ -369,6 +371,8 @@ func (sc *SyncCoordinator) HandleLocalFileChanged(repoID string, payload *protoc
 	sc.lamportClock.Tick()
 	sc.vectorClock.Tick(sc.localPeerID)
 
+	vcJSON, _ := json.Marshal(sc.vectorClock.AsMap())
+
 	// 3. Save new metadata state to SQLite
 	meta := sqlite.FileMetadata{
 		RepositoryID:      repoID,
@@ -380,6 +384,7 @@ func (sc *SyncCoordinator) HandleLocalFileChanged(repoID string, payload *protoc
 		IsDeleted:         payload.Action == "delete",
 		UpdatedAt:         time.Now().Unix(),
 		Mode:              payload.Mode,
+		VectorClock:       string(vcJSON),
 	}
 
 	if err := sc.db.Metadata().Save(&meta); err != nil {
@@ -777,9 +782,11 @@ func (sc *SyncCoordinator) executeSyncTask(task *SyncTask) {
 		// Register pending download details
 		sc.mu.Lock()
 		sc.pendingDownloads[task.FilePath+":"+task.Hash] = pendingDownload{
-			size:   task.Size,
-			repoID: task.RepoID,
-			mode:   task.Mode,
+			size:    task.Size,
+			repoID:  task.RepoID,
+			mode:    task.Mode,
+			peerID:  task.PeerID,
+			retries: task.Retries,
 		}
 		sc.mu.Unlock()
 
@@ -978,11 +985,40 @@ func (sc *SyncCoordinator) HandleP2PMessage(peerID string, msg *ipc.Message) err
 			return nil
 		}
 
+		cleanPath := filepath.Clean(payload.Path)
+		if filepath.IsAbs(cleanPath) || strings.HasPrefix(cleanPath, "..") || strings.Contains(cleanPath, "../") || strings.Contains(cleanPath, "..\\") {
+			log.Printf("[SyncCoordinator] Security warning: path traversal attempt rejected in StartDownload for path: %s\n", payload.Path)
+			return fmt.Errorf("invalid path traversal in download: %s", payload.Path)
+		}
+
 		// Start download session: connect to the peer's dynamic transferPort
 		transferID := fmt.Sprintf("dl_%d_%s", time.Now().UnixNano(), pDetails.repoID)
-		err = sc.transferMgr.StartDownload(transferID, payload.Path, pDetails.repoID, peerID, payload.Hash, pDetails.size, host, payload.TransferPort, pDetails.mode)
+		err = sc.transferMgr.StartDownload(transferID, cleanPath, pDetails.repoID, peerID, payload.Hash, pDetails.size, host, payload.TransferPort, pDetails.mode)
 		if err != nil {
 			log.Printf("[SyncCoordinator] StartDownload failed: %v\n", err)
+			if pDetails.retries < MaxDownloadRetries {
+				backoff := time.Duration(1<<uint(pDetails.retries)) * time.Second
+				log.Printf("[SyncCoordinator] Requeueing download for %s (retry %d/%d, backoff %v)\n",
+					payload.Path, pDetails.retries+1, MaxDownloadRetries, backoff)
+				time.AfterFunc(backoff, func() {
+					task := &SyncTask{
+						RepoID:    pDetails.repoID,
+						FilePath:  payload.Path,
+						Type:      Download,
+						Hash:      payload.Hash,
+						Size:      pDetails.size,
+						Timestamp: time.Now(),
+						PeerID:    pDetails.peerID,
+						Mode:      pDetails.mode,
+						Retries:   pDetails.retries + 1,
+					}
+					sc.queue.Push(task)
+				})
+			} else {
+				log.Printf("[SyncCoordinator] Download failed for %s after %d retries, purging stale metadata\n",
+					payload.Path, MaxDownloadRetries)
+				_ = sc.db.Metadata().HardDelete(pDetails.repoID, payload.Path)
+			}
 		}
 		return nil
 	}
@@ -1200,16 +1236,7 @@ func (sc *SyncCoordinator) HandleConflictResolution(repoID, path, resolution, pe
 			Status:       "remote_accepted",
 		})
 	case "merge":
-		log.Printf("[SyncCoordinator] Manual merge requested for %s in repo %s. No automated merge available; user must merge files manually.\n", path, repoID)
-		sc.db.History().LogEvent(&sqlite.SyncEvent{
-			EventID:      fmt.Sprintf("conflict_resolved_%d", time.Now().UnixNano()),
-			RepositoryID: repoID,
-			FilePath:     path,
-			PeerID:       peerID,
-			Timestamp:    time.Now().Unix(),
-			EventType:    "conflict_resolved",
-			Status:       "manual_merge",
-		})
+		return fmt.Errorf("manual merge not supported yet for %s in repo %s; choose 'local' or 'remote' instead", path, repoID)
 	default:
 		return fmt.Errorf("unknown conflict resolution: %s", resolution)
 	}
@@ -1245,9 +1272,6 @@ func (sc *SyncCoordinator) SyncAllRepositoriesWithPeer(peerID string) {
 }
 
 func (sc *SyncCoordinator) ScanAndIndexLocalFiles(repoID, localPath string) error {
-	sc.mu.Lock()
-	defer sc.mu.Unlock()
-
 	scanStartTime := time.Now().UnixMilli()
 
 	log.Printf("[SyncCoordinator] Starting initial directory scan for repository %s at %s\n", repoID, localPath)

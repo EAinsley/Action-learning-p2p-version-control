@@ -32,13 +32,11 @@ public class ConflictDialog extends Dialog<String> {
         ToggleGroup group = new ToggleGroup();
         RadioButton keepLocal = new RadioButton("Keep Local - Your version wins");
         RadioButton acceptRemote = new RadioButton("Accept Remote - Their version wins");
-        RadioButton manualMerge = new RadioButton("Mark for Manual Merge");
         keepLocal.setToggleGroup(group);
         acceptRemote.setToggleGroup(group);
-        manualMerge.setToggleGroup(group);
         keepLocal.setSelected(true);
 
-        content.getChildren().addAll(info, keepLocal, acceptRemote, manualMerge);
+        content.getChildren().addAll(info, keepLocal, acceptRemote);
         getDialogPane().setContent(content);
 
         ButtonType resolveBtn = new ButtonType("Resolve", ButtonBar.ButtonData.OK_DONE);
@@ -48,7 +46,7 @@ public class ConflictDialog extends Dialog<String> {
             if (button == resolveBtn) {
                 if (keepLocal.isSelected()) return "local";
                 if (acceptRemote.isSelected()) return "remote";
-                return "merge";
+                return "local";
             }
             return null;
         });

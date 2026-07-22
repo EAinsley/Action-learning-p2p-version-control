@@ -35,7 +35,10 @@ public:
     ~WindowsIpcClient() override { disconnect(); }
 
     bool connect(const std::string& socketPath) override {
-        disconnect();
+        std::lock_guard<std::mutex> lockSend(sendMutex_);
+        std::lock_guard<std::mutex> lockRecv(recvMutex_);
+        std::lock_guard<std::mutex> lockState(stateMutex_);
+        disconnectLocked();
         
         WSADATA wsaData;
         if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
@@ -79,18 +82,24 @@ public:
     }
 
     bool send(const std::string& message) override {
-        if (socket_ == -1) return false;
+        std::lock_guard<std::mutex> lockSend(sendMutex_);
+        SOCKET sock = INVALID_SOCKET;
+        {
+            std::lock_guard<std::mutex> lockState(stateMutex_);
+            sock = socket_;
+        }
+        if (sock == INVALID_SOCKET) return false;
         uint32_t len = static_cast<uint32_t>(message.size());
         uint32_t netLen = htonl(len);
         uint32_t totalWritten = 0;
         while (totalWritten < sizeof(netLen)) {
-            int n = ::send(socket_, reinterpret_cast<const char*>(&netLen) + totalWritten, sizeof(netLen) - totalWritten, 0);
+            int n = ::send(sock, reinterpret_cast<const char*>(&netLen) + totalWritten, sizeof(netLen) - totalWritten, 0);
             if (n <= 0) return false;
             totalWritten += n;
         }
         totalWritten = 0;
         while (totalWritten < len) {
-            int n = ::send(socket_, message.data() + totalWritten, len - totalWritten, 0);
+            int n = ::send(sock, message.data() + totalWritten, len - totalWritten, 0);
             if (n <= 0) return false;
             totalWritten += n;
         }
@@ -98,17 +107,23 @@ public:
     }
 
     bool receive(std::string& message) override {
-        if (socket_ == -1) return false;
+        std::lock_guard<std::mutex> lockRecv(recvMutex_);
+        SOCKET sock = INVALID_SOCKET;
+        {
+            std::lock_guard<std::mutex> lockState(stateMutex_);
+            sock = socket_;
+        }
+        if (sock == INVALID_SOCKET) return false;
         uint32_t netLen = 0;
         uint32_t totalRead = 0;
         while (totalRead < sizeof(netLen)) {
-            int n = ::recv(socket_, reinterpret_cast<char*>(&netLen) + totalRead, sizeof(netLen) - totalRead, 0);
+            int n = ::recv(sock, reinterpret_cast<char*>(&netLen) + totalRead, sizeof(netLen) - totalRead, 0);
             if (n <= 0) {
                 int err = WSAGetLastError();
                 if (err == WSAETIMEDOUT) {
                     return false; // timeout only — keep connection alive
                 }
-                disconnect(); // real error
+                disconnectOnError(); // real error
                 return false;
             }
             totalRead += n;
@@ -118,14 +133,9 @@ public:
         message.resize(len);
         totalRead = 0;
         while (totalRead < len) {
-            int n = ::recv(socket_, &message[totalRead], len - totalRead, 0);
+            int n = ::recv(sock, &message[totalRead], len - totalRead, 0);
             if (n <= 0) {
-                int err = WSAGetLastError();
-                if (err == WSAETIMEDOUT) {
-                    disconnect(); // partial read + timeout → must reconnect for clean framing
-                } else {
-                    disconnect();
-                }
+                disconnectOnError();
                 return false;
             }
             totalRead += n;
@@ -134,19 +144,36 @@ public:
     }
 
     void disconnect() override {
-        if (socket_ != -1) {
+        std::lock_guard<std::mutex> lockSend(sendMutex_);
+        std::lock_guard<std::mutex> lockRecv(recvMutex_);
+        std::lock_guard<std::mutex> lockState(stateMutex_);
+        disconnectLocked();
+    }
+
+    bool isConnected() override {
+        std::lock_guard<std::mutex> lockState(stateMutex_);
+        return socket_ != INVALID_SOCKET && socket_ != -1;
+    }
+
+private:
+    void disconnectLocked() {
+        if (socket_ != INVALID_SOCKET && socket_ != -1) {
             closesocket(socket_);
-            socket_ = -1;
+            socket_ = INVALID_SOCKET;
             WSACleanup();
         }
     }
 
-    bool isConnected() override {
-        return socket_ != -1;
+    void disconnectOnError() {
+        std::lock_guard<std::mutex> lockSend(sendMutex_);
+        std::lock_guard<std::mutex> lockState(stateMutex_);
+        disconnectLocked();
     }
 
-private:
     SOCKET socket_;
+    mutable std::mutex sendMutex_;
+    mutable std::mutex recvMutex_;
+    mutable std::mutex stateMutex_;
 };
 
 #else
@@ -161,7 +188,10 @@ public:
     ~UnixIpcClient() override { disconnect(); }
 
     bool connect(const std::string& path) override {
-        disconnect();
+        std::lock_guard<std::mutex> lockSend(sendMutex_);
+        std::lock_guard<std::mutex> lockRecv(recvMutex_);
+        std::lock_guard<std::mutex> lockState(stateMutex_);
+        disconnectLocked();
 
         int tcpPort = getIpcTcpPort();
         if (tcpPort > 0) {
@@ -181,8 +211,6 @@ public:
                 return false;
             }
 
-            // Set receive timeout so blocking read() can be interrupted on shutdown.
-            // Timeouts do NOT disconnect — the caller retries and checks g_shutdown.
             struct timeval tv;
             tv.tv_sec = 3;
             tv.tv_usec = 0;
@@ -204,8 +232,6 @@ public:
             return false;
         }
 
-        // Set receive timeout so blocking read() can be interrupted on shutdown.
-        // Timeouts do NOT disconnect — the caller retries and checks g_shutdown.
         struct timeval tv;
         tv.tv_sec = 3;
         tv.tv_usec = 0;
@@ -214,18 +240,25 @@ public:
     }
 
     bool send(const std::string& message) override {
-        if (socketFd_ < 0) return false;
+        std::lock_guard<std::mutex> lockSend(sendMutex_);
+        int fd = -1;
+        {
+            std::lock_guard<std::mutex> lockState(stateMutex_);
+            fd = socketFd_;
+        }
+        if (fd < 0) return false;
+
         uint32_t len = static_cast<uint32_t>(message.size());
         uint32_t netLen = htonl(len);
         size_t totalWritten = 0;
         while (totalWritten < sizeof(netLen)) {
-            ssize_t n = ::write(socketFd_, reinterpret_cast<const char*>(&netLen) + totalWritten, sizeof(netLen) - totalWritten);
+            ssize_t n = ::write(fd, reinterpret_cast<const char*>(&netLen) + totalWritten, sizeof(netLen) - totalWritten);
             if (n <= 0) return false;
             totalWritten += n;
         }
         totalWritten = 0;
         while (totalWritten < len) {
-            ssize_t n = ::write(socketFd_, message.data() + totalWritten, len - totalWritten);
+            ssize_t n = ::write(fd, message.data() + totalWritten, len - totalWritten);
             if (n <= 0) return false;
             totalWritten += n;
         }
@@ -233,20 +266,27 @@ public:
     }
 
     bool receive(std::string& message) override {
-        if (socketFd_ < 0) return false;
+        std::lock_guard<std::mutex> lockRecv(recvMutex_);
+        int fd = -1;
+        {
+            std::lock_guard<std::mutex> lockState(stateMutex_);
+            fd = socketFd_;
+        }
+        if (fd < 0) return false;
+
         uint32_t netLen = 0;
         size_t totalRead = 0;
         while (totalRead < sizeof(netLen)) {
-            ssize_t n = ::read(socketFd_, reinterpret_cast<char*>(&netLen) + totalRead, sizeof(netLen) - totalRead);
+            ssize_t n = ::read(fd, reinterpret_cast<char*>(&netLen) + totalRead, sizeof(netLen) - totalRead);
             if (n < 0) {
                 if (errno == EAGAIN || errno == EWOULDBLOCK) {
                     return false; // timeout only — keep connection alive
                 }
-                disconnect(); // real error
+                disconnectOnError(); // real error
                 return false;
             }
             if (n == 0) { // EOF — peer disconnected
-                disconnect();
+                disconnectOnError();
                 return false;
             }
             totalRead += n;
@@ -256,17 +296,13 @@ public:
         message.resize(len);
         totalRead = 0;
         while (totalRead < len) {
-            ssize_t n = ::read(socketFd_, &message[totalRead], len - totalRead);
+            ssize_t n = ::read(fd, &message[totalRead], len - totalRead);
             if (n < 0) {
-                if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                    disconnect(); // partial read + timeout → must reconnect for clean framing
-                } else {
-                    disconnect();
-                }
+                disconnectOnError();
                 return false;
             }
             if (n == 0) {
-                disconnect();
+                disconnectOnError();
                 return false;
             }
             totalRead += n;
@@ -275,18 +311,35 @@ public:
     }
 
     void disconnect() override {
+        std::lock_guard<std::mutex> lockSend(sendMutex_);
+        std::lock_guard<std::mutex> lockRecv(recvMutex_);
+        std::lock_guard<std::mutex> lockState(stateMutex_);
+        disconnectLocked();
+    }
+
+    bool isConnected() override {
+        std::lock_guard<std::mutex> lockState(stateMutex_);
+        return socketFd_ >= 0;
+    }
+
+private:
+    void disconnectLocked() {
         if (socketFd_ >= 0) {
             ::close(socketFd_);
             socketFd_ = -1;
         }
     }
 
-    bool isConnected() override {
-        return socketFd_ >= 0;
+    void disconnectOnError() {
+        std::lock_guard<std::mutex> lockSend(sendMutex_);
+        std::lock_guard<std::mutex> lockState(stateMutex_);
+        disconnectLocked();
     }
 
-private:
     int socketFd_;
+    mutable std::mutex sendMutex_;
+    mutable std::mutex recvMutex_;
+    mutable std::mutex stateMutex_;
 };
 #endif
 
