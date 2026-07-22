@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-VERSION="${VERSION:-1.6.4}"
+VERSION="${VERSION:-1.6.5}"
 VERSION="${VERSION#v}"
 APP_NAME="P2PVersionControl"
 

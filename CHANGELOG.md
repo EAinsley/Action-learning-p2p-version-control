@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-## [1.6.4] - 2026-07-22
+## [1.6.5] - 2026-07-22
 
 ### Fixed
 - Fixed macOS UI freeze and coordinator lockup by unscoping global mutex during initial directory scanning and file hashing.
