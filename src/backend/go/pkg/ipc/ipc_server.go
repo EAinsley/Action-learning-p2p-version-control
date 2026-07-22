@@ -34,6 +34,8 @@ type IpcServer struct {
 	// Protects against send-on-closed-channel during shutdown
 	stopChan chan struct{}
 	stopOnce sync.Once
+	stopMu   sync.RWMutex
+	stopped  bool
 
 	// Buffer the latest state messages to replay to late-connecting clients
 	latestMessages map[string]*Message
@@ -213,6 +215,12 @@ func (s *IpcServer) SendMessage(msg *Message) {
 		s.latestMu.Unlock()
 	}
 
+	s.stopMu.RLock()
+	defer s.stopMu.RUnlock()
+	if s.stopped {
+		return
+	}
+
 	select {
 	case <-s.stopChan:
 		// Server is shutting down, drop message
@@ -224,8 +232,11 @@ func (s *IpcServer) SendMessage(msg *Message) {
 
 func (s *IpcServer) Stop() {
 	s.stopOnce.Do(func() {
+		s.stopMu.Lock()
+		s.stopped = true
 		close(s.stopChan)
 		close(s.ToC)
+		s.stopMu.Unlock()
 	})
 
 	s.clientMu.Lock()
